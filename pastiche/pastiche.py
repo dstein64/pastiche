@@ -252,6 +252,7 @@ def main(argv=sys.argv):
         if step > 0:
             artist.draw()
         if args.workspace is not None and step % args.workspace_step == 0:
+            os.makedirs(args.workspace, exist_ok=True)
             name = f'{step:0{max_step_str_width}d}.png'
             path = os.path.join(args.workspace, name)
             save_image(artist.pastiche, path)
