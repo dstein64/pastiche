@@ -167,13 +167,13 @@ def main(argv=sys.argv):
     if not args.output.lower().endswith('.png'):
         sys.stderr.write('Output file is missing PNG extension.\n')
     if args.verbose:
-        print('Device: {}'.format(args.device))
+        print('device: {}'.format(args.device))
     # TODO: rand handling
     seed = args.seed
     if seed is None:
         seed = random.randint(0, 2 ** 32 - 1)
     if args.verbose:
-        print('Seed: {}'.format(seed))
+        print('seed: {}'.format(seed))
 
     vgg19_h5_path = os.path.join(
         os.path.dirname(__file__), 'vgg19_weights_tf_dim_ordering_tf_kernels_notop.h5')
@@ -199,16 +199,21 @@ def main(argv=sys.argv):
         style_weights=args.style_weights)
 
     # The 0th step does nothing, which is why there are args.num_steps + 1 total steps
-    padding_width = len(str(args.num_steps))
+    max_step_str_width = len(str(args.num_steps))
+    step_col_spacing = max(4, max_step_str_width)
+    if args.verbose:
+        print()
+        print(f'{"step": <{step_col_spacing}} loss')
+        print(f'{"----": <{step_col_spacing}} ----')
     for step in range(args.num_steps + 1):
         if step > 0:
             artist.draw()
         if args.workspace is not None and step % args.workspace_step == 0:
-            name = f'{step:0{padding_width}d}.png'
+            name = f'{step:0{max_step_str_width}d}.png'
             path = os.path.join(args.workspace, name)
             save_image(artist.pastiche, path)
-        if step % args.info_step == 0:
-            info = f'{step: <{padding_width}d} {artist.loss:.2f}'
+        if args.verbose and step % args.info_step == 0:
+            info = f'{step: <{step_col_spacing}d} {artist.loss:.2f}'
             print(info)
     save_image(artist.pastiche, args.output)
 
