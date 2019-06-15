@@ -60,12 +60,13 @@ $ pastiche \
     pastiche.png
 ```
 
-| vangogh_starry_night.jpg | boston.jpg  | pastiche.png |      
-|:------------------------:|:-----------:|:------------:|
-| <img src="https://github.com/dstein64/
-|           pastiche/blob/master/example/
-|           vangogh_starry_night.jpg?raw=true"
-|       width="300"/>
+|   vangogh_starry_night.jpg    |   boston.jpg    |   pastiche.png    |      
+|:-----------------------------:|:---------------:|:-----------------:|
+| ![][vangogh_starry_night.jpg] | ![][boston.jpg] | ![][pastiche.png] |
+
+[vangogh_starry_night.jpg]: https://github.com/dstein64/pastiche/blob/master/example/vangogh_starry_night.jpg?raw=true
+[vangogh_starry_night.jpg]: https://github.com/dstein64/pastiche/blob/master/example/boston.jpg?raw=true
+[vangogh_starry_night.jpg]: https://github.com/dstein64/pastiche/blob/master/example/pastiche.png?raw=true
 
 License
 -------
