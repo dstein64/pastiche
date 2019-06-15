@@ -140,8 +140,9 @@ def _parse_args(argv):
     parser.add_argument('--seed', type=int, help='RNG seed.')
     parser.add_argument('--device', default='cuda' if 'cuda' in DEVICES else 'cpu', choices=DEVICES)
     parser.add_argument('--no-verbose', action='store_false', dest='verbose')
-    parser.add_argument('--num-steps', type=int, default=1000)
+    parser.add_argument('--num-steps', type=int, default=10000)
     parser.add_argument('--workspace', help='Directory for saving intermediate results.')
+    parser.add_argument('--workspace-step', type=int, default=1, help='Step size for saving to workspace.')
     parser.add_argument('--random-init', action='store_true', help='Initialize randomly (overrides --init)')
     parser.add_argument('--init', help='Optional file path to the initialization image.')
     parser.add_argument(
@@ -197,7 +198,7 @@ def main(argv=sys.argv):
     for step in range(args.num_steps + 1):
         if step > 0:
             artist.draw()
-        if args.workspace is not None:
+        if args.workspace is not None and step % args.workspace_step == 0:
             padding_width = len(str(args.num_steps))
             name = f'{step:0{padding_width}d}.png'
             path = os.path.join(args.workspace, name)
