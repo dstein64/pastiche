@@ -206,8 +206,6 @@ def main(argv=sys.argv):
     args = _parse_args(argv)
     if not args.output.lower().endswith('.png'):
         sys.stderr.write('Output file is missing PNG extension.\n')
-    if args.verbose:
-        print('device: {}'.format(args.device))
     seed = args.seed
     if seed is None:
         seed = random.randint(0, 2 ** 32 - 1)
@@ -216,8 +214,6 @@ def main(argv=sys.argv):
     if args.deterministic:
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
-    if args.verbose:
-        print('seed: {}'.format(seed))
 
     vgg19_h5_path = os.path.join(
         os.path.dirname(__file__), 'vgg19_weights_tf_dim_ordering_tf_kernels_notop.h5')
@@ -245,6 +241,10 @@ def main(argv=sys.argv):
     # The 0th step does nothing, which is why there are (args.num_steps + 1) total steps
     max_step_str_width = len(str(args.num_steps))
     if args.verbose:
+        print(f'device: {args.device}')
+        print(f'seed: {seed}')
+        print(f'size: {"x".join(str(x) for x in reversed(content.shape[2:]))}')
+        print(f'style_size: {"x".join(str(x) for x in reversed(style.shape[2:]))}')
         print()
         print('step elapsed loss')
         print('---- ------- ----')
