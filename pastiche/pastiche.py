@@ -198,7 +198,8 @@ def main(argv=sys.argv):
         if step > 0:
             artist.draw()
         if args.workspace is not None:
-            name = f'{step:04d}.png'
+            padding_width = len(str(args.num_steps))
+            name = f'{step:0{padding_width}d}.png'
             path = os.path.join(args.workspace, name)
             save_image(artist.pastiche, path)
     save_image(artist.pastiche, args.output)
