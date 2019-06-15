@@ -109,7 +109,7 @@ class PasticheArtist:
                 pastiche_g = gram(pastiche_act)
                 style_g = gram(style_act)
                 if self.style_weights is None or len(self.style_weights) == 0:
-                    weight = 1e3 / (pastiche_act.shape[1] ** 2)
+                    weight = 2e3 / (pastiche_act.shape[1] ** 2)
                 elif len(self.style_weights) > idx:
                     weight = self.style_weights[idx]
                 else:
