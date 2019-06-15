@@ -7,7 +7,7 @@ from typing import Iterable, Optional, Sequence
 
 from PIL import Image
 import torch
-import torch.nn as nn
+from torch.nn.functional import mse_loss
 import torch.optim as optim
 from torchvision.transforms.functional import resize, to_tensor, to_pil_image
 
@@ -112,7 +112,7 @@ class PasticheArtist:
                 weight = self.content_weights[idx]
             else:
                 weight = self.content_weights[-1]
-            loss = loss + weight * nn.MSELoss()(pastiche_act, content_act)
+            loss = loss + weight * mse_loss(pastiche_act, content_act)
 
         for idx, layer in enumerate(self.style_layers):
             pastiche_act = pastiche_targets[layer]
@@ -125,7 +125,7 @@ class PasticheArtist:
                 weight = self.style_weights[idx]
             else:
                 weight = self.style_weights[-1]
-            loss = loss + weight * nn.MSELoss()(pastiche_g, style_g.detach())
+            loss = loss + weight * mse_loss(pastiche_g, style_g.detach())
 
         return loss
 
