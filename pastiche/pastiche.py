@@ -2,6 +2,7 @@ import argparse
 import os
 import random
 import sys
+import time
 from typing import Iterable, Optional, Sequence
 
 from PIL import Image
@@ -37,13 +38,25 @@ DEFAULT_CONTENT_LAYERS = ['block4_relu2']
 DEFAULT_STYLE_LAYERS = ['block1_relu1', 'block2_relu1', 'block3_relu1', 'block4_relu1', 'block5_relu1']
 
 
-def load_image(image_name, size=None):
-    image = Image.open(image_name)
+def load_image(image_path, size=None):
+    x = Image.open(image_path)
     if size is not None:
-        image = resize(image, size)
-    image = to_tensor(image) * 255.0
-    image = image.unsqueeze(0)
-    return image
+        if isinstance(size, int):
+            w, h = x.size  # (width, height)
+            if w > h:
+                size = (int(round((size / w) * h, 0)), size)  # (height, width)
+            elif w < h:
+                size = (size, int(round((size / h) * w, 0)))  # (height, width)
+            else:
+                size = (size, size)
+        x = resize(x, size)
+    x = to_tensor(x) * 255.0
+    x = x.unsqueeze(0)
+    return x
+
+
+def resize_image(input):
+    pass
 
 
 def save_image(input, path):
@@ -136,56 +149,75 @@ def _parse_args(argv):
         prog='pastiche',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
+
+    # General options
     parser.add_argument('--version',
                         action='version',
                         version='pastiche {}'.format(__version__))
-    parser.add_argument('--seed', type=int, help='RNG seed.')
     parser.add_argument('--device', default='cuda' if 'cuda' in DEVICES else 'cpu', choices=DEVICES)
-    parser.add_argument('--no-verbose', action='store_false', dest='verbose')
-    parser.add_argument('--num-steps', type=int, default=5000)
-    parser.add_argument('--info-step', type=int, default=100, help='Step size for displaying information.')
-    parser.add_argument('--workspace', help='Directory for saving intermediate results.')
-    parser.add_argument('--workspace-step', type=int, default=10, help='Step size for saving to workspace.')
-    parser.add_argument('--random-init', action='store_true', help='Initialize randomly (overrides --init)')
-    parser.add_argument('--init', help='Optional file path to the initialization image.')
+    parser.add_argument('--seed', type=int, help='RNG seed.')
+    parser.add_argument(
+        '--deterministic', action='store_true', help='Avoid non-determinism where possible (at cost of speed).')
+    # Optimization options
+    parser.add_argument('--num-steps', type=int, default=1000)
     parser.add_argument(
         '--content-layers', choices=VGG19.LAYER_NAMES, nargs='*', default=DEFAULT_CONTENT_LAYERS)
     parser.add_argument(
         '--style-layers', choices=VGG19.LAYER_NAMES, nargs='*', default=DEFAULT_STYLE_LAYERS)
     parser.add_argument('--content-weights', nargs='*', type=float)
     parser.add_argument('--style-weights', nargs='*', type=float)
+    # Output options
+    parser.add_argument('--no-verbose', action='store_false', dest='verbose')
+    parser.add_argument('--info-step', type=int, default=100, help='Step size for displaying information.')
+    parser.add_argument('--workspace', help='Directory for saving intermediate results.')
+    parser.add_argument('--workspace-step', type=int, default=10, help='Step size for saving to workspace.')
+    # Input options
+    parser.add_argument('--random-init', action='store_true', help='Initialize randomly (overrides --init)')
+    parser.add_argument('--init', help='Optional file path to the initialization image.')
+    parser.add_argument(
+        '--size', type=int, default=512, help='Maximum dimension for content and pastiche images.')
+    parser.add_argument(
+        '--style-size', type=int, help='Maximum dimension for style image (defaults to same as --size).')
+    # Required options
     parser.add_argument('content', help='File path to the content image.')
     parser.add_argument('style', help='File path to the style image.')
     parser.add_argument('output', help='File path to save the PNG image.')
+
     args = parser.parse_args(argv[1:])
+    if args.style_size is None:
+        args.style_size = args.size
     return args
 
 
 def main(argv=sys.argv):
+    start_time = time.time()
     args = _parse_args(argv)
     if not args.output.lower().endswith('.png'):
         sys.stderr.write('Output file is missing PNG extension.\n')
     if args.verbose:
         print('device: {}'.format(args.device))
-    # TODO: rand handling
     seed = args.seed
     if seed is None:
         seed = random.randint(0, 2 ** 32 - 1)
+    torch.cuda.manual_seed_all(seed)
+    torch.manual_seed(seed)
+    if args.deterministic:
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
     if args.verbose:
         print('seed: {}'.format(seed))
 
     vgg19_h5_path = os.path.join(
         os.path.dirname(__file__), 'vgg19_weights_tf_dim_ordering_tf_kernels_notop.h5')
     vgg19 = VGG19.from_h5(vgg19_h5_path).to(args.device)
-    content = load_image(args.content, size=512).to(args.device) # TODO: real size
-    style = load_image(args.style, size=512 * 2).to(args.device) # TODO: real size
+    content = load_image(args.content, size=args.size).to(args.device)
+    style = load_image(args.style, size=args.style_size).to(args.device)
     if args.random_init:
         # Even though actual image is comprised of pixels with intensities between 0 and 255,
         # initializing from a standard normal works well. Negatives are clamped later, but the
         # optimization procedure pushes intensities to be positive.
         init = torch.randn(content.shape, device='cuda')
     elif args.init is not None:
-        # TODO: make sure that size= supports 2D arg
         init = load_image(args.init, size=content.shape[2:]).to(args.device)
     else:
         init = content.clone()
@@ -197,13 +229,12 @@ def main(argv=sys.argv):
         content_weights=args.content_weights,
         style_weights=args.style_weights)
 
-    # The 0th step does nothing, which is why there are args.num_steps + 1 total steps
+    # The 0th step does nothing, which is why there are (args.num_steps + 1) total steps
     max_step_str_width = len(str(args.num_steps))
-    step_col_spacing = max(4, max_step_str_width)
     if args.verbose:
         print()
-        print(f'{"step": <{step_col_spacing}} loss')
-        print(f'{"----": <{step_col_spacing}} ----')
+        print('step elapsed loss')
+        print('---- ------- ----')
     for step in range(args.num_steps + 1):
         if step > 0:
             artist.draw()
@@ -212,7 +243,8 @@ def main(argv=sys.argv):
             path = os.path.join(args.workspace, name)
             save_image(artist.pastiche, path)
         if args.verbose and step % args.info_step == 0:
-            info = f'{step: <{step_col_spacing}d} {artist.loss:.2f}'
+            elapsed = time.time() - start_time
+            info = f'{step: <4} {elapsed: <7.1f} {artist.loss:.2f}'
             print(info)
     save_image(artist.pastiche, args.output)
 
