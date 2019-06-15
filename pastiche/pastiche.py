@@ -83,43 +83,46 @@ class PasticheArtist:
         self.style_targets = self.vgg19.forward(self.style, self.style_layers)
         self.content_weights = content_weights
         self.style_weights = style_weights
+        self.loss = self.calc_loss().item()
+
+    def calc_loss(self):
+        loss = torch.tensor(0.0, requires_grad=True, device=self.vgg19.block1_conv1.weight.device)
+
+        pastiche_layers = list(self.content_layers) + list(self.style_layers)
+        pastiche_targets = self.vgg19.forward(self.pastiche, pastiche_layers)
+        for idx, layer in enumerate(self.content_layers):
+            pastiche_act = pastiche_targets[layer]
+            content_act = self.content_targets[layer]
+            if self.content_weights is None or len(self.content_weights) == 0:
+                weight = 1.0
+            elif len(self.content_weights) > idx:
+                weight = self.content_weights[idx]
+            else:
+                weight = self.content_weights[-1]
+            loss = loss + weight * nn.MSELoss()(pastiche_act, content_act)
+
+        for idx, layer in enumerate(self.style_layers):
+            pastiche_act = pastiche_targets[layer]
+            style_act = self.style_targets[layer]
+            pastiche_g = gram(pastiche_act)
+            style_g = gram(style_act)
+            if self.style_weights is None or len(self.style_weights) == 0:
+                weight = 2e3 / (pastiche_act.shape[1] ** 2)
+            elif len(self.style_weights) > idx:
+                weight = self.style_weights[idx]
+            else:
+                weight = self.style_weights[-1]
+            loss = loss + weight * nn.MSELoss()(pastiche_g, style_g.detach())
+
+        return loss
 
 
     def draw(self):
         def closure():
             self.optimizer.zero_grad()
-
-            loss = torch.tensor(0.0, requires_grad=True, device=self.vgg19.block1_conv1.weight.device)
-
-            pastiche_layers = list(self.content_layers) + list(self.style_layers)
-            pastiche_targets = self.vgg19.forward(self.pastiche, pastiche_layers)
-            for idx, layer in enumerate(self.content_layers):
-                pastiche_act = pastiche_targets[layer]
-                content_act = self.content_targets[layer]
-                if self.content_weights is None or len(self.content_weights) == 0:
-                    weight = 1.0
-                elif len(self.content_weights) > idx:
-                    weight = self.content_weights[idx]
-                else:
-                    weight = self.content_weights[-1]
-                loss = loss + weight * nn.MSELoss()(pastiche_act, content_act)
-
-            for idx, layer in enumerate(self.style_layers):
-                pastiche_act = pastiche_targets[layer]
-                style_act = self.style_targets[layer]
-                pastiche_g = gram(pastiche_act)
-                style_g = gram(style_act)
-                if self.style_weights is None or len(self.style_weights) == 0:
-                    weight = 2e3 / (pastiche_act.shape[1] ** 2)
-                elif len(self.style_weights) > idx:
-                    weight = self.style_weights[idx]
-                else:
-                    weight = self.style_weights[-1]
-                loss = loss + weight * nn.MSELoss()(pastiche_g, style_g.detach())
-
+            loss = self.calc_loss()
             loss.backward()
-
-            print(loss.item())
+            self.loss = loss.item()
             return loss
 
         self.optimizer.step(closure)
@@ -140,9 +143,10 @@ def _parse_args(argv):
     parser.add_argument('--seed', type=int, help='RNG seed.')
     parser.add_argument('--device', default='cuda' if 'cuda' in DEVICES else 'cpu', choices=DEVICES)
     parser.add_argument('--no-verbose', action='store_false', dest='verbose')
-    parser.add_argument('--num-steps', type=int, default=10000)
+    parser.add_argument('--num-steps', type=int, default=5000)
+    parser.add_argument('--info-step', type=int, default=100, help='Step size for displaying information.')
     parser.add_argument('--workspace', help='Directory for saving intermediate results.')
-    parser.add_argument('--workspace-step', type=int, default=1, help='Step size for saving to workspace.')
+    parser.add_argument('--workspace-step', type=int, default=10, help='Step size for saving to workspace.')
     parser.add_argument('--random-init', action='store_true', help='Initialize randomly (overrides --init)')
     parser.add_argument('--init', help='Optional file path to the initialization image.')
     parser.add_argument(
@@ -195,14 +199,17 @@ def main(argv=sys.argv):
         style_weights=args.style_weights)
 
     # The 0th step does nothing, which is why there are args.num_steps + 1 total steps
+    padding_width = len(str(args.num_steps))
     for step in range(args.num_steps + 1):
         if step > 0:
             artist.draw()
         if args.workspace is not None and step % args.workspace_step == 0:
-            padding_width = len(str(args.num_steps))
             name = f'{step:0{padding_width}d}.png'
             path = os.path.join(args.workspace, name)
             save_image(artist.pastiche, path)
+        if step % args.info_step == 0:
+            info = f'{step: <{padding_width}d} {artist.loss:.2f}'
+            print(info)
     save_image(artist.pastiche, args.output)
 
     return os.EX_OK
