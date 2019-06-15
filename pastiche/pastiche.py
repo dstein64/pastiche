@@ -36,6 +36,7 @@ DEVICES = tuple(DEVICES)
 
 DEFAULT_CONTENT_LAYERS = ['block4_relu2']
 DEFAULT_STYLE_LAYERS = ['block1_relu1', 'block2_relu1', 'block3_relu1', 'block4_relu1', 'block5_relu1']
+DEFAULT_TV_WEIGHT = 1e-3
 
 
 def load_image(image_path, size=None):
@@ -84,7 +85,8 @@ class PasticheArtist:
             content_layers: Iterable=DEFAULT_CONTENT_LAYERS,
             style_layers: Iterable=DEFAULT_STYLE_LAYERS,
             content_weights: Optional[Sequence]=None,
-            style_weights: Optional[Sequence]=None):
+            style_weights: Optional[Sequence]=None,
+            tv_weight: float=DEFAULT_TV_WEIGHT):
         self.vgg19 = vgg19
         self.pastiche = init.clone().requires_grad_()
         self.content = content
@@ -96,6 +98,7 @@ class PasticheArtist:
         self.style_targets = self.vgg19.forward(self.style, self.style_layers)
         self.content_weights = content_weights
         self.style_weights = style_weights
+        self.tv_weight = tv_weight
         self.loss = self._calc_loss().item()
 
     def _calc_loss(self):
@@ -103,6 +106,8 @@ class PasticheArtist:
 
         pastiche_layers = list(self.content_layers) + list(self.style_layers)
         pastiche_targets = self.vgg19.forward(self.pastiche, pastiche_layers)
+
+        # content loss
         for idx, layer in enumerate(self.content_layers):
             pastiche_act = pastiche_targets[layer]
             content_act = self.content_targets[layer]
@@ -114,6 +119,7 @@ class PasticheArtist:
                 weight = self.content_weights[-1]
             loss = loss + weight * mse_loss(pastiche_act, content_act)
 
+        # style loss
         for idx, layer in enumerate(self.style_layers):
             pastiche_act = pastiche_targets[layer]
             style_act = self.style_targets[layer]
@@ -126,6 +132,11 @@ class PasticheArtist:
             else:
                 weight = self.style_weights[-1]
             loss = loss + weight * mse_loss(pastiche_g, style_g.detach())
+
+        # total-variation loss
+        tv_loss = (self.pastiche[:,:,:,1:] - self.pastiche[:,:,:,:-1]).abs().sum()
+        tv_loss += (self.pastiche[:,:,1:,:] - self.pastiche[:,:,:-1,:]).abs().sum()
+        loss = loss + self.tv_weight * tv_loss
 
         return loss
 
@@ -166,6 +177,7 @@ def _parse_args(argv):
         '--style-layers', choices=VGG19.LAYER_NAMES, nargs='*', default=DEFAULT_STYLE_LAYERS)
     parser.add_argument('--content-weights', nargs='*', type=float)
     parser.add_argument('--style-weights', nargs='*', type=float)
+    parser.add_argument('--tv-weight', default=DEFAULT_TV_WEIGHT, type=float, help='Total-variation weight')
     # Output options
     parser.add_argument('--no-verbose', action='store_false', dest='verbose')
     parser.add_argument('--info-step', type=int, default=100, help='Step size for displaying information.')
@@ -227,7 +239,8 @@ def main(argv=sys.argv):
         content_layers=args.content_layers,
         style_layers=args.style_layers,
         content_weights=args.content_weights,
-        style_weights=args.style_weights)
+        style_weights=args.style_weights,
+        tv_weight=args.tv_weight)
 
     # The 0th step does nothing, which is why there are (args.num_steps + 1) total steps
     max_step_str_width = len(str(args.num_steps))
