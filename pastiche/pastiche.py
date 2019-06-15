@@ -91,7 +91,8 @@ class PasticheArtist:
 
             loss = torch.tensor(0.0, requires_grad=True, device=self.vgg19.block1_conv1.weight.device)
 
-            pastiche_targets = self.vgg19.forward(self.pastiche, self.content_layers + self.style_layers)
+            pastiche_layers = list(self.content_layers) + list(self.style_layers)
+            pastiche_targets = self.vgg19.forward(self.pastiche, pastiche_layers)
             for idx, layer in enumerate(self.content_layers):
                 pastiche_act = pastiche_targets[layer]
                 content_act = self.content_targets[layer]
