@@ -83,9 +83,9 @@ class PasticheArtist:
         self.style_targets = self.vgg19.forward(self.style, self.style_layers)
         self.content_weights = content_weights
         self.style_weights = style_weights
-        self.loss = self.calc_loss().item()
+        self.loss = self._calc_loss().item()
 
-    def calc_loss(self):
+    def _calc_loss(self):
         loss = torch.tensor(0.0, requires_grad=True, device=self.vgg19.block1_conv1.weight.device)
 
         pastiche_layers = list(self.content_layers) + list(self.style_layers)
@@ -116,11 +116,10 @@ class PasticheArtist:
 
         return loss
 
-
     def draw(self):
         def closure():
             self.optimizer.zero_grad()
-            loss = self.calc_loss()
+            loss = self._calc_loss()
             loss.backward()
             self.loss = loss.item()
             return loss
