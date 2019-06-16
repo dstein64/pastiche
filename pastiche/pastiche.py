@@ -155,6 +155,27 @@ class PasticheArtist:
 # * Command Line Interface
 # ************************************************************
 
+class _ListLayersAction(argparse.Action):
+    def __init__(self,
+                 option_strings,
+                 dest=argparse.SUPPRESS,
+                 default=argparse.SUPPRESS,
+                 help=None):
+        kwargs = {
+            'option_strings': option_strings,
+            'dest': dest,
+            'default': default,
+            'nargs': 0,
+        }
+        if help is not None:
+            kwargs['help'] = help
+        super(_ListLayersAction, self).__init__(**kwargs)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        print('\n'.join(VGG19.LAYER_NAMES))
+        parser.exit()
+
+
 def _parse_args(argv):
     parser = argparse.ArgumentParser(
         prog='pastiche',
@@ -169,14 +190,26 @@ def _parse_args(argv):
     parser.add_argument('--seed', type=int, help='RNG seed.')
     parser.add_argument(
         '--deterministic', action='store_true', help='Avoid non-determinism where possible (at cost of speed).')
+    parser.add_argument(
+        '--list-layers', action=_ListLayersAction, help='Show a list of available layer names and exit.')
     # Optimization options
     parser.add_argument('--num-steps', type=int, default=1000)
     parser.add_argument(
-        '--content-layers', choices=VGG19.LAYER_NAMES, nargs='*', default=DEFAULT_CONTENT_LAYERS)
+        '--content-layers',
+        choices=VGG19.LAYER_NAMES,
+        metavar='LAYER_NAME',
+        nargs='*',
+        default=DEFAULT_CONTENT_LAYERS,
+        help='Content layer names. Use --list-layers to show a list of choices.')
     parser.add_argument(
-        '--style-layers', choices=VGG19.LAYER_NAMES, nargs='*', default=DEFAULT_STYLE_LAYERS)
-    parser.add_argument('--content-weights', nargs='*', type=float)
-    parser.add_argument('--style-weights', nargs='*', type=float)
+        '--style-layers',
+        choices=VGG19.LAYER_NAMES,
+        metavar='LAYER_NAME',
+        nargs='*',
+        default=DEFAULT_STYLE_LAYERS,
+        help='Style layer names. Use --list-layers to show a list of choices.')
+    parser.add_argument('--content-weights', metavar='WEIGHT', nargs='*', type=float)
+    parser.add_argument('--style-weights', metavar='WEIGHT', nargs='*', type=float)
     parser.add_argument('--tv-weight', default=DEFAULT_TV_WEIGHT, type=float, help='Total-variation weight')
     # Output options
     parser.add_argument('--no-verbose', action='store_false', dest='verbose')
