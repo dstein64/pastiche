@@ -172,7 +172,11 @@ class _ListLayersAction(argparse.Action):
         super(_ListLayersAction, self).__init__(**kwargs)
 
     def __call__(self, parser, namespace, values, option_string=None):
-        print('\n'.join(VGG19.LAYER_NAMES))
+        idx_padding = len(str(len(VGG19.LAYER_NAMES)))
+        for idx, name in enumerate(VGG19.LAYER_NAMES):
+            if idx > 0 and name[:6] != VGG19.LAYER_NAMES[idx - 1][:6]:
+                print()
+            print(f'{idx + 1: >{idx_padding}}. {name}')
         parser.exit()
 
 
