@@ -30,7 +30,7 @@ import torch.nn as nn
 
 
 class VGG19(nn.Module):
-    LAYER_NAMES = [
+    LAYER_NAMES = (
         'block1_conv1',
         'block1_relu1',
         'block1_conv2',
@@ -72,7 +72,7 @@ class VGG19(nn.Module):
         'block5_conv4',
         'block5_relu4',
         'block5_pool',
-    ]
+    )
 
     Weights = namedtuple('Weights', [
         'block1_conv1_W', 'block1_conv1_b',

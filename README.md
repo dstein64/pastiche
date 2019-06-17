@@ -7,6 +7,7 @@ Features
 --------
 
 - Support for saving intermediate images during optimization
+- An option for preserving colors from the content image
 
 Installation
 ------------
@@ -47,7 +48,7 @@ $ pastiche --help
 Example Usage
 -------------
 
-This examples applies the style from Vincent van Gogh's `The Starry Night` to a photo I took in Boston
+This example applies the style from Vincent van Gogh's `The Starry Night` to a photo I took in Boston
 in 2015.
 
 ```sh

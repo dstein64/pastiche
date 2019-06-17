@@ -56,10 +56,6 @@ def load_image(image_path, size=None):
     return x
 
 
-def resize_image(input):
-    pass
-
-
 def save_image(input, path):
     x = input.detach().squeeze(0).div(255.0).clamp(0.0, 1.0).to('cpu')
     x = to_pil_image(x)
@@ -73,6 +69,40 @@ def gram(input):
     x = torch.mm(x, x.t())
     x = x.div(h * w)
     return x
+
+
+def cov(input):
+    """Returns a covariance matrix for the given input matrix."""
+    mu = input.mean(dim=0)
+    normalized = input - mu
+    output = normalized.t().mm(normalized).div(input.shape[0])
+    return output
+
+
+def matrix_sqrt(input):
+    eig = input.eig(eigenvectors=True)
+    eig_val = eig.eigenvalues[:, 0]
+    eig_vec = eig.eigenvectors
+    output = eig_vec.mm(eig_val.sqrt().diag()).mm(eig_vec.t())
+    return output
+
+
+def transfer_color(source, target):
+    """Transfers color from source to target. Doesn't clamp to valid values."""
+    shape = target.shape
+    # flatten the spatial dimensions
+    source = source.reshape((3, -1)).t()
+    target = target.reshape((3, -1)).t()
+    mu_source = source.mean(dim=0)
+    mu_target = target.mean(dim=0)
+    cov_source = cov(source)
+    cov_target = cov(target)
+    x = matrix_sqrt(cov_source)
+    x = x.mm(matrix_sqrt(cov_target).inverse())
+    x = x.mm((target - mu_target).t()).t()
+    x = x + mu_source
+    output = x.t().reshape(shape)
+    return output
 
 
 class PasticheArtist:
@@ -227,6 +257,7 @@ def _parse_args(argv):
         '--size', type=int, default=512, help='Maximum dimension for content and pastiche images.')
     parser.add_argument(
         '--style-size', type=int, help='Maximum dimension for style image (defaults to same as --size).')
+    parser.add_argument('--preserve-color', action='store_true', help='Preserve color of content image.')
     # Required options
     parser.add_argument('content', help='File path to the content image.')
     parser.add_argument('style', help='File path to the style image.')
@@ -257,6 +288,8 @@ def main(argv=sys.argv):
     vgg19 = VGG19.from_h5(vgg19_h5_path).to(args.device)
     content = load_image(args.content, size=args.size).to(args.device)
     style = load_image(args.style, size=args.style_size).to(args.device)
+    if args.preserve_color:
+        style.data = transfer_color(content, style)
     if args.random_init:
         # Even though actual image is comprised of pixels with intensities between 0 and 255,
         # initializing from a standard normal works well. Negatives are clamped later, but the
