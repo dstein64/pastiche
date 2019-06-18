@@ -37,6 +37,15 @@ DEVICES = tuple(DEVICES)
 DEFAULT_CONTENT_LAYERS = ['block4_relu2']
 DEFAULT_STYLE_LAYERS = ['block1_relu1', 'block2_relu1', 'block3_relu1', 'block4_relu1', 'block5_relu1']
 DEFAULT_TV_WEIGHT = 1e-3
+# VGG details are at:
+#   http://www.robots.ox.ac.uk/~vgg/research/very_deep/
+# which links to:
+#   https://gist.github.com/ksimonyan/3785162f95cd2d5fee77
+# for the normalization details.
+# > "The input images should be zero-centered by mean pixel (rather than mean image)
+#    subtraction. Namely, the following BGR values should be subtracted:
+#      [103.939, 116.779, 123.68]."
+VGG_MEAN = [103.939, 116.779, 123.68]  # BGR means
 
 
 def load_image(image_path, size=None):
@@ -52,12 +61,21 @@ def load_image(image_path, size=None):
                 size = (size, size)
         x = resize(x, size)
     x = to_tensor(x) * 255.0
+    # Normalize for VGG
+    x[[0, 1, 2]] = x[[2, 1, 0]]  # RGB -> BGR
+    for idx, shift in enumerate(VGG_MEAN):
+        x[idx] -= shift
     x = x.unsqueeze(0)
     return x
 
 
 def save_image(input, path):
-    x = input.detach().squeeze(0).div(255.0).clamp(0.0, 1.0).to('cpu')
+    x = input.detach().squeeze(0).to('cpu')
+    # Remove VGG normalization
+    for idx, shift in enumerate(VGG_MEAN):
+        x[idx] += shift
+    x[[0, 1, 2]] = x[[2, 1, 0]]  # BGR -> RGB
+    x = x.div(255.0).clamp(0.0, 1.0)
     x = to_pil_image(x)
     x.save(path, 'png')
 
@@ -291,9 +309,6 @@ def main(argv=sys.argv):
     if args.preserve_color:
         style.data = transfer_color(content, style)
     if args.random_init:
-        # Even though actual image is comprised of pixels with intensities between 0 and 255,
-        # initializing from a standard normal works well. Negatives are clamped later, but the
-        # optimization procedure pushes intensities to be positive.
         init = torch.randn(content.shape, device='cuda')
     elif args.init is not None:
         init = load_image(args.init, size=content.shape[2:]).to(args.device)

@@ -54,7 +54,6 @@ in 2015.
 ```sh
 $ pastiche \
     --num-steps 5000 \
-    --size 1024 \
     --device cuda \
     boston.jpg \
     vangogh_starry_night.jpg \
