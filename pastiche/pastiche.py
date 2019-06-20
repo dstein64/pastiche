@@ -1,4 +1,5 @@
 import argparse
+import math
 import os
 import random
 import sys
@@ -48,18 +49,36 @@ DEFAULT_TV_WEIGHT = 0.0
 VGG_MEAN = [103.939, 116.779, 123.68]  # BGR means
 
 
-def load_image(image_path, size=None):
+def load_image(image_path, pixels=None, size=None):
+    """
+    :param pixels: Number of pixels to resize to.
+    :param size: Overrides 'pixels' when present. A pair, (height, width),
+                 or the maximum dimension to resize to.
+
+    """
     x = Image.open(image_path)
+    w, h = x.size  # (width, height)
     if size is not None:
         if isinstance(size, int):
-            w, h = x.size  # (width, height)
             if w > h:
-                size = (int(round((size / w) * h, 0)), size)  # (height, width)
+                h_ = int(round((size / w) * h, 0))
+                w_ = size
             elif w < h:
-                size = (size, int(round((size / h) * w, 0)))  # (height, width)
+                h_ = size
+                w_ = int(round((size / h) * w, 0))
             else:
-                size = (size, size)
-        x = resize(x, size)
+                h_ = size
+                w_ = size
+        else:
+            h_ = size[0]
+            w_ = size[1]
+    elif pixels is not None:
+        h_ = int(round(math.sqrt(pixels * h / w), 0))
+        w_ = int(round((w / h) * h_, 0))
+    else:
+        h_ = h
+        w_ = w
+    x = resize(x, (h_, w_))
     x = to_tensor(x) * 255.0
     # Normalize for VGG
     x[[0, 1, 2]] = x[[2, 1, 0]]  # RGB -> BGR
@@ -274,9 +293,22 @@ def _parse_args(argv):
     parser.add_argument('--random-init', action='store_true', help='Initialize randomly (overrides --init)')
     parser.add_argument('--init', help='Optional file path to the initialization image.')
     parser.add_argument(
-        '--size', type=int, default=512, help='Maximum dimension for content and pastiche images.')
+        '--size-pixels',
+        type=int,
+        default=500 ** 2,  # recommendation from "Controlling Perceptual Factors in Neural Style Transfer"
+        help='Approximate number of pixels for content and pastiche images.')
     parser.add_argument(
-        '--style-size', type=int, help='Maximum dimension for style image (defaults to same as --size).')
+        '--size',
+        type=int,
+        help='Maximum dimension for content and pastiche images. Overrides --size-pixels when present.')
+    parser.add_argument(
+        '--style-size-pixels',
+        type=int,
+        help='Approximate number of pixels for style image.')
+    parser.add_argument(
+        '--style-size',
+        type=int,
+        help='Maximum dimension for style image. Overrides --style-size-pixels when present.')
     parser.add_argument('--preserve-color', action='store_true', help='Preserve color of content image.')
     # Required options
     parser.add_argument('content', help='File path to the content image.')
@@ -284,8 +316,6 @@ def _parse_args(argv):
     parser.add_argument('output', help='File path to save the PNG image.')
 
     args = parser.parse_args(argv[1:])
-    if args.style_size is None:
-        args.style_size = args.size
     return args
 
 
@@ -306,8 +336,11 @@ def main(argv=sys.argv):
     vgg19_h5_path = os.path.join(
         os.path.dirname(__file__), 'vgg19_weights_tf_dim_ordering_tf_kernels_notop.h5')
     vgg19 = VGG19.from_h5(vgg19_h5_path).to(args.device)
-    content = load_image(args.content, size=args.size).to(args.device)
-    style = load_image(args.style, size=args.style_size).to(args.device)
+    content = load_image(args.content, pixels=args.size_pixels, size=args.size).to(args.device)
+    style_pixels = args.style_size_pixels
+    if style_pixels is None:
+        style_pixels = content.shape[2] * content.shape[3]
+    style = load_image(args.style, pixels=style_pixels, size=args.style_size).to(args.device)
     if args.preserve_color:
         style.data = transfer_color(content, style)
     if args.random_init:
