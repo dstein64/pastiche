@@ -105,8 +105,8 @@ $ pastiche \
 $ convert pastiche3.png pastiche.jpg  # requires ImageMagick
 ```
 
-The `--preserve-color` option can be used to retain colors from the content image. For example, the image below
-was generated using the same commands as above (up to `--size 2048`), with the addition of `--preserve-color`.
+The `--preserve-color` option can be used to retain colors from the content image. The image below was generated
+using the same commands as above (up to `--size 2048`), with the addition of `--preserve-color`.
 
 <img src="https://github.com/dstein64/pastiche/blob/master/example/pastiche_preserve_color.jpg?raw=true" width="384"/>
 
