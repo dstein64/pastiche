@@ -65,17 +65,18 @@ def load_image(image_path, size=None):
     x[[0, 1, 2]] = x[[2, 1, 0]]  # RGB -> BGR
     for idx, shift in enumerate(VGG_MEAN):
         x[idx] -= shift
-    x = x.unsqueeze(0)
+    x.unsqueeze_(0)
     return x
 
 
 def save_image(input, path):
-    x = input.detach().squeeze(0).to('cpu')
+    x = input.detach().squeeze(0).to('cpu', copy=True)
     # Remove VGG normalization
     for idx, shift in enumerate(VGG_MEAN):
         x[idx] += shift
     x[[0, 1, 2]] = x[[2, 1, 0]]  # BGR -> RGB
-    x = x.div(255.0).clamp(0.0, 1.0)
+    x.div_(255.0)
+    x.clamp_(0.0, 1.0)
     x = to_pil_image(x)
     x.save(path, 'png')
 
@@ -85,7 +86,7 @@ def gram(input):
     x = input.squeeze(0)
     x = x.flatten(1)
     x = torch.mm(x, x.t())
-    x = x.div(h * w)
+    x.div_(h * w)
     return x
 
 
@@ -93,8 +94,9 @@ def cov(input):
     """Returns a covariance matrix for the given input matrix."""
     mu = input.mean(dim=0)
     normalized = input - mu
-    output = normalized.t().mm(normalized).div(input.shape[0])
-    return output
+    x = normalized.t().mm(normalized)
+    x.div_(input.shape[0])
+    return x
 
 
 def matrix_sqrt(input):
