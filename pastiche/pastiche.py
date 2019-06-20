@@ -36,7 +36,7 @@ DEVICES = tuple(DEVICES)
 
 DEFAULT_CONTENT_LAYERS = ['block4_relu2']
 DEFAULT_STYLE_LAYERS = ['block1_relu1', 'block2_relu1', 'block3_relu1', 'block4_relu1', 'block5_relu1']
-DEFAULT_TV_WEIGHT = 1e-3
+DEFAULT_TV_WEIGHT = 0.0
 # VGG details are at:
 #   http://www.robots.ox.ac.uk/~vgg/research/very_deep/
 # which links to:
