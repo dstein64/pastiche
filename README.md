@@ -7,7 +7,7 @@ A PyTorch-based Python implementation of Neural Style Transfer [1].
  <img src="https://github.com/dstein64/pastiche/blob/master/example/vangogh_starry_night.jpg?raw=true" height="256"/>
  <img src="https://github.com/dstein64/pastiche/blob/master/example/boston.jpg?raw=true" height="256"/>
  <br>
- <img src="https://github.com/dstein64/pastiche/blob/master/example/pastiche.jpg?raw=true" width="712"/>
+ <img src="https://github.com/dstein64/pastiche/blob/master/example/pastiche.jpg?raw=true" width="710"/>
 </div>
 
 Features
