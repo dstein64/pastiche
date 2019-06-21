@@ -80,6 +80,8 @@ def load_image(image_path, pixels=None, size=None):
         w_ = w
     x = resize(x, (h_, w_))
     x = to_tensor(x) * 255.0
+    if x.shape[0] == 1:
+        x = x.repeat(3, 1, 1)
     # Normalize for VGG
     x[[0, 1, 2]] = x[[2, 1, 0]]  # RGB -> BGR
     for idx, shift in enumerate(VGG_MEAN):
