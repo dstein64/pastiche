@@ -81,7 +81,7 @@ $ pastiche \
 $ pastiche \
     --size 1024 \
     --num-steps 1000 \
-    --init --init pastiche0.png \
+    --init pastiche0.png \
     boston.jpg \
     vangogh_starry_night.jpg \
     pastiche1.png
@@ -89,7 +89,7 @@ $ pastiche \
 $ pastiche \
     --size 2048 \
     --num-steps 500 \
-    --init --init pastiche1.png \
+    --init pastiche1.png \
     boston.jpg \
     vangogh_starry_night.jpg \
     pastiche2.png
@@ -97,7 +97,7 @@ $ pastiche \
 $ pastiche \
     --size 4096 \
     --num-steps 100 \
-    --init --init pastiche2.png \
+    --init pastiche2.png \
     boston.jpg \
     vangogh_starry_night.jpg \
     pastiche3.png
