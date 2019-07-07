@@ -312,6 +312,7 @@ def _parse_args(argv):
         type=int,
         help='Maximum dimension for style image. Overrides --style-size-pixels when present.')
     parser.add_argument('--preserve-color', action='store_true', help='Preserve color of content image.')
+    parser.add_argument('--quantization', type=int, help='Weight quantization bits per weight.')
     # Required options
     parser.add_argument('content', help='File path to the content image.')
     parser.add_argument('style', help='File path to the style image.')
@@ -335,8 +336,12 @@ def main(argv=sys.argv):
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
 
-    vgg19_h5_path = os.path.join(
-        os.path.dirname(__file__), 'vgg19_weights_tf_dim_ordering_tf_kernels_notop.h5')
+    if args.quantization is None or args.quantization == 0:
+        vgg19_h5_path = os.path.join(
+            os.path.dirname(__file__), 'vgg19_weights_tf_dim_ordering_tf_kernels_notop.h5')
+    else:
+        vgg19_h5_path = os.path.join(
+            os.path.dirname(__file__), f'vgg19_weights_tf_dim_ordering_tf_kernels_notop_q{args.quantization}.h5')
     vgg19 = VGG19.from_h5(vgg19_h5_path).to(args.device)
     content = load_image(args.content, pixels=args.size_pixels, size=args.size).to(args.device)
     style_pixels = args.style_size_pixels
