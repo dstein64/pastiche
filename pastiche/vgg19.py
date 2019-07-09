@@ -1,4 +1,6 @@
 from collections import namedtuple
+import re
+import struct
 from typing import Iterable
 
 import h5py
@@ -12,9 +14,9 @@ import torch.nn as nn
 # model for style transfer (possibly due to not using the multi-scale training
 # procedure used for the original model).
 
-# The VGG19 class below loads the original VGG19 weights. The original trained model
+# The VGG19 class below loads arbitrary VGG19 weights. The original trained model
 # was released as a Caffe model, but was subsequently released as a Keras model which
-# is used for loading the weights below (it's an h5 file).
+# is used for loading the weights below (it's an h5 file) using from_keras_h5.
 
 # The Keras model file was released into the public domain from Kaggle:
 #   https://www.kaggle.com/keras/vgg19/home
@@ -27,6 +29,50 @@ import torch.nn as nn
 # That link is from:
 #   https://github.com/keras-team/keras-applications/blob/master/
 #           keras_applications/vgg19.py
+
+# Models with quantized weights can be saved and loaded with VGG19.save_quantized_bin
+# and VGG19.from_quantized_bin. Before calling VGG19.save_quantized_bin, it's preferable
+# to have loaded the model with the full-precision weights (i.e., using VGG19.from_keras_h5).
+
+# *****************************************************
+# * Quantization Specification
+# *****************************************************
+
+# All data is saved little endian.
+
+#  **************
+#  *** HEADER ***
+#  **************
+#    magic_number     (char[8])
+#  ***************
+#  *** GENERAL ***
+#  ***************
+#    num_bits         (uint8_t)  # bits per weight
+#  *****************
+#  *** PER LAYER ***
+#  *****************
+#    num_centroids    (uint32_t)
+#    centroids        (float32[])
+#    in_channels      (uint16_t)
+#    out_channels     (uint16_t)
+#    quantized_kernel (uint8_t[])
+#    bias             (float32[])
+
+MAGIC_NUMBER = b'QUANTVGG'  # Must be eight or fewer chars, and should remain fixed.
+KERNEL_SPATIAL_SIZE = (3, 3)
+
+
+SIZEOF_UINT8 = 1
+UINT8_FMT = '<B'
+
+SIZEOF_UINT16 = 2
+UINT16_FMT = '<H'
+
+SIZEOF_UINT32 = 4
+UINT32_FMT = '<I'
+
+SIZEOF_FLOAT32 = 4
+FLOAT32_FMT = '<f'
 
 
 class VGG19(nn.Module):
@@ -220,9 +266,134 @@ class VGG19(nn.Module):
 
         return output
 
+    def save_quantized_bin(self, path, num_bits):
+        assert num_bits <= 31  # num_centroids stored as uint32_t
+        import kmeans1d  # Not required for general pastiche usage, just for generating quantized model.
+        k = 2 ** num_bits
+
+        bytes_ = bytearray()
+
+        # magic_number (char[8])
+        bytes_.extend(struct.pack('8s', MAGIC_NUMBER))
+
+        # num_bits (uint8_t)
+        bytes_.extend(struct.pack(UINT8_FMT, num_bits))
+
+        layer_names = [layer_name for layer_name in VGG19.LAYER_NAMES if re.match('^block\d+_conv\d+$', layer_name)]
+        for layer_name in layer_names:
+            layer = getattr(self, layer_name)
+            bias = layer.bias
+            shape = layer.weight.shape
+            weight = layer.weight.flatten()
+            clusters, centroids = kmeans1d.cluster(weight, k)
+            q_kernel_bits = []
+            for cluster in clusters:
+                q_kernel_bits.extend(bin(cluster)[2:].zfill(num_bits))
+            while len(q_kernel_bits) % 8 != 0:
+                q_kernel_bits.append('0')
+            q_kernel_bytes = [int(''.join(q_kernel_bits[x:x + 8]), 2) for x in range(0, len(q_kernel_bits), 8)]
+
+            # num_centroids (uint32_t)
+            bytes_.extend(struct.pack(UINT32_FMT, len(centroids)))
+
+            # centroids (float32[])
+            for centroid in centroids:
+                bytes_.extend(struct.pack(FLOAT32_FMT, centroid))
+
+            # in_channels (uint16_t)
+            bytes_.extend(struct.pack(UINT16_FMT, shape[1]))
+
+            # out_channels (uint16_t)
+            bytes_.extend(struct.pack(UINT16_FMT, shape[0]))
+
+            # quantized_kernel (uint8_t[])
+            for x in q_kernel_bytes:
+                bytes_.extend(struct.pack(UINT8_FMT, x))
+
+            # bias (float32[])
+            for x in bias:
+                bytes_.extend(struct.pack(FLOAT32_FMT, x))
+
+        with open(path, 'wb') as f:
+            f.write(bytes_)
 
     @staticmethod
-    def from_h5(path):
+    def from_quantized_bin(path):
+        import numpy as np  # Not required for general pastiche usage, just for loading a quantized model.
+        with open(path, 'rb') as f:
+            bytes_ = f.read()
+        offset = 0
+
+        # magic_number (char[8])
+        magic_number = struct.unpack_from('8s', bytes_, offset)[0]
+        assert magic_number == MAGIC_NUMBER
+        offset += 8
+
+        # num_bits (uint8_t)
+        num_bits = struct.unpack_from(UINT8_FMT, bytes_, offset)[0]
+        offset += SIZEOF_UINT8
+
+        weights_lookup = {}
+        layer_names = [layer_name for layer_name in VGG19.LAYER_NAMES if re.match('^block\d+_conv\d+$', layer_name)]
+        for layer_name in layer_names:
+            # num_centroids (uint32_t)
+            num_centroids = struct.unpack_from(UINT32_FMT, bytes_, offset)[0]
+            offset += SIZEOF_UINT32
+
+            # centroids (float32[])
+            centroids = []
+            for _ in range(num_centroids):
+                centroid = struct.unpack_from(FLOAT32_FMT, bytes_, offset)[0]
+                offset += SIZEOF_FLOAT32
+                centroids.append(centroid)
+
+            # in_channels (uint16_t)
+            in_channels = struct.unpack_from(UINT16_FMT, bytes_, offset)[0]
+            offset += SIZEOF_UINT16
+
+            # out_channels (uint16_t)
+            out_channels = struct.unpack_from(UINT16_FMT, bytes_, offset)[0]
+            offset += SIZEOF_UINT16
+
+            # quantized_kernel (uint8_t[])
+            kernel_size = in_channels * out_channels * KERNEL_SPATIAL_SIZE[0] * KERNEL_SPATIAL_SIZE[1]
+            q_kernel_num_bits = num_bits * kernel_size
+            while q_kernel_num_bits % 8 != 0:
+                q_kernel_num_bits += 1
+            q_kernel_num_bytes = q_kernel_num_bits // 8
+            q_kernel_bits = []
+            for _ in range(q_kernel_num_bytes):
+                byte = struct.unpack_from(UINT8_FMT, bytes_, offset)[0]
+                offset += SIZEOF_UINT8
+                q_kernel_bits.extend(bin(byte)[2:].zfill(8))
+            q_kernel_bits = ''.join(q_kernel_bits)
+            kernel_flattened = []
+            for kernel_idx in range(kernel_size):
+                bits_idx = kernel_idx * num_bits
+                bits = q_kernel_bits[bits_idx:bits_idx + num_bits]
+                centroid_idx = int(bits, 2)
+                weight = centroids[centroid_idx]
+                kernel_flattened.append(weight)
+            shape = (out_channels, in_channels) + KERNEL_SPATIAL_SIZE
+            kernel = np.reshape(kernel_flattened, shape).astype(np.float32)
+
+            # bias
+            bias = []
+            for _ in range(out_channels):
+                weight = struct.unpack_from(FLOAT32_FMT, bytes_, offset)[0]
+                offset += SIZEOF_FLOAT32
+                bias.append(weight)
+            bias = np.array(bias, dtype=np.float32)
+
+            weights_lookup[f'{layer_name}_W'] = kernel
+            weights_lookup[f'{layer_name}_b'] = bias
+
+        assert offset == len(bytes_)
+        weights = VGG19.Weights(**weights_lookup)
+        return VGG19(weights)
+
+    @staticmethod
+    def from_keras_h5(path):
         W_order = (3,2,0,1)
         with h5py.File(path, 'r') as f:
             weights = VGG19.Weights(
