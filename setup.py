@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': ['pastiche=pastiche.pastiche:main'],
     },
+    extras_require={'dev': ['kmeans1d']},
     keywords=['gatys', 'style-transfer', 'neural-style-transfer'],
     license='MIT',
     long_description=open('README.md').read(),

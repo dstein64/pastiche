@@ -1,5 +1,6 @@
 from collections import namedtuple
 from typing import Iterable
+import re
 
 import h5py
 import torch
@@ -12,9 +13,9 @@ import torch.nn as nn
 # model for style transfer (possibly due to not using the multi-scale training
 # procedure used for the original model).
 
-# The VGG19 class below loads the original VGG19 weights. The original trained model
+# The VGG19 class below loads arbitrary VGG19 weights. The original trained model
 # was released as a Caffe model, but was subsequently released as a Keras model which
-# is used for loading the weights below (it's an h5 file).
+# is used for loading the weights below (it's an h5 file) using from_keras_h5.
 
 # The Keras model file was released into the public domain from Kaggle:
 #   https://www.kaggle.com/keras/vgg19/home
@@ -27,6 +28,12 @@ import torch.nn as nn
 # That link is from:
 #   https://github.com/keras-team/keras-applications/blob/master/
 #           keras_applications/vgg19.py
+
+# To generate a quantized model, load the original model, then call VGG19.save_quantized_bin.
+#   > vgg19 = VGG19.from_keras_h5(keras_h5_path)
+#   > vgg19.save_quantized_bin(quantized_bin_path)
+# VGG19.from_quantized_bin loads a quantized model.
+#   > vgg19_q = VGG19.from_quantized_bin(quantized_bin_path)
 
 
 class VGG19(nn.Module):
@@ -220,9 +227,40 @@ class VGG19(nn.Module):
 
         return output
 
+    def save_quantized_bin(self, path):
+        import kmeans1d  # Not required for general pastiche usage, just for generating quantized model.
+        k = 2 ** 8
+        q_state = {}  # quantized state
+        layer_names = [layer_name for layer_name in VGG19.LAYER_NAMES if re.match('^block\d+_conv\d+$', layer_name)]
+        for layer_name in layer_names:
+            layer = getattr(self, layer_name)
+            bias = layer.bias
+            shape = layer.weight.shape
+            weight = layer.weight.flatten()
+            clusters, centroids = kmeans1d.cluster(weight, k)
+            q_state[layer_name + '_W_q'] = torch.tensor(clusters, dtype=torch.uint8).reshape(shape)
+            q_state[layer_name + '_W_table'] = torch.tensor(centroids, dtype=torch.float32)
+            q_state[layer_name + '_b'] = bias.detach().to('cpu', copy=True)
+        torch.save(q_state, path)
 
     @staticmethod
-    def from_h5(path):
+    def from_quantized_bin(path):
+        q_state = torch.load(path, map_location='cpu')
+        weights_dict = {}
+        layer_names = [layer_name for layer_name in VGG19.LAYER_NAMES if re.match('^block\d+_conv\d+$', layer_name)]
+        for layer_name in layer_names:
+            W_q = q_state[layer_name + '_W_q']
+            shape = W_q.shape
+            W_table = q_state[layer_name + '_W_table']
+            W = W_table[W_q.flatten().tolist()].reshape(shape)
+            b = q_state[layer_name + '_b']
+            weights_dict[layer_name + '_W'] = W.numpy()
+            weights_dict[layer_name + '_b'] = b.numpy()
+        weights = VGG19.Weights(**weights_dict)
+        return VGG19(weights)
+
+    @staticmethod
+    def from_keras_h5(path):
         W_order = (3,2,0,1)
         with h5py.File(path, 'r') as f:
             weights = VGG19.Weights(

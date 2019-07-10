@@ -335,9 +335,9 @@ def main(argv=sys.argv):
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
 
-    vgg19_h5_path = os.path.join(
-        os.path.dirname(__file__), 'vgg19_weights_tf_dim_ordering_tf_kernels_notop.h5')
-    vgg19 = VGG19.from_h5(vgg19_h5_path).to(args.device)
+    vgg19_q_bin_path = os.path.join(
+        os.path.dirname(__file__), 'vgg19_weights_tf_dim_ordering_tf_kernels_notop_q.bin')
+    vgg19 = VGG19.from_quantized_bin(vgg19_q_bin_path).to(args.device)
     content = load_image(args.content, pixels=args.size_pixels, size=args.size).to(args.device)
     style_pixels = args.style_size_pixels
     if style_pixels is None:
