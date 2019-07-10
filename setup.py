@@ -22,6 +22,7 @@ setup(
         'Programming Language :: Python :: 3',
     ],
     description='A PyTorch implementation of Neural Style Transfer (NST)',
+    extras_require={'dev': ['kmeans1d', 'numpy']},
     entry_points={
         'console_scripts': ['pastiche=pastiche.pastiche:main'],
     },
