@@ -8,8 +8,8 @@ for Q in {0..8}; do
     python -m pastiche \
         --num-steps 2000 \
         --quantization $Q \
-        example/boston.jpg \
-        example/vangogh_starry_night.jpg \
+        example/elephant.jpg \
+        example/the_scream.png \
         $DIR/0.png
 
     python -m pastiche \
@@ -17,8 +17,8 @@ for Q in {0..8}; do
         --quantization $Q \
         --num-steps 1000 \
         --init $DIR/0.png \
-        example/boston.jpg \
-        example/vangogh_starry_night.jpg \
+        example/elephant.jpg \
+        example/the_scream.png \
         $DIR/1.png
 
     python -m pastiche \
@@ -26,8 +26,8 @@ for Q in {0..8}; do
         --quantization $Q \
         --num-steps 500 \
         --init $DIR/1.png \
-        example/boston.jpg \
-        example/vangogh_starry_night.jpg \
+        example/elephant.jpg \
+        example/the_scream.png \
         $DIR/2.png
 
     convert $DIR/2.png $DIR/q$Q.jpg
