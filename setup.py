@@ -31,7 +31,7 @@ setup(
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
     name='pastiche',
-    package_data={'pastiche': ['version.txt', 'vgg19_weights_tf_dim_ordering_tf_kernels_notop.h5']},
+    package_data={'pastiche': ['version.txt', 'vgg19_weights_tf_dim_ordering_tf_kernels_notop_q.bin']},
     packages=['pastiche'],
     python_requires='>=3.5',
     install_requires=['h5py', 'pillow', 'torch', 'torchvision'],
