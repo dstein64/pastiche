@@ -13,7 +13,7 @@ for Q in {0..8}; do
         $DIR/0.png
 
     python -m pastiche \
-        --size 1024 \
+        --size-pixels 1000000 \
         --quantization $Q \
         --num-steps 1000 \
         --init $DIR/0.png \
@@ -22,7 +22,8 @@ for Q in {0..8}; do
         $DIR/1.png
 
     python -m pastiche \
-        --size 2048 \
+        --device cpu \
+        --size-pixels 3300000 \
         --quantization $Q \
         --num-steps 500 \
         --init $DIR/1.png \
