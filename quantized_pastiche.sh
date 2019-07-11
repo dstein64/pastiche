@@ -22,7 +22,6 @@ for Q in {0..8}; do
         $DIR/1.png
 
     python -m pastiche \
-        --device cpu \
         --size-pixels 3300000 \
         --quantization $Q \
         --num-steps 500 \
