@@ -38,7 +38,6 @@ QUANTIZE_LAYERS = [
 print('bits layer')
 for b in BITS:
     k = 2 ** b
-    keys = []
     target_path = os.path.join(
         os.path.dirname(__file__), 'pastiche', f'vgg19_weights_tf_dim_ordering_tf_kernels_notop_q{b}.h5')
     shutil.copyfile(vgg19_h5_path, target_path)
