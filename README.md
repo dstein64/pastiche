@@ -49,6 +49,13 @@ $ pastiche CONTENT STYLE OUTPUT
 `CONTENT` is the path to the content image, `STYLE` is the path to the style image, and `OUTPUT` is the path to save
 the synthesized pastiche PNG file.
 
+If the launcher script was not installed within a directory on your PATH, pastiche can be launched by passing its
+module name to Python.
+
+```sh
+$ python3 -m pastiche CONTENT STYLE OUTPUT
+```
+
 There are various options, including but not limited to:
 - Device (CPU versus GPU)
 - Number of optimization iterations
