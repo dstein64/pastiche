@@ -30,6 +30,7 @@ if torch.cuda.torch.cuda.is_available() and torch.cuda.device_count() > 0:
         DEVICES.append('cuda:{}'.format(idx))
 DEVICES = tuple(DEVICES)
 
+EXIT_SUCCESS = 0
 
 # ************************************************************
 # * Core
@@ -384,7 +385,7 @@ def main(argv=sys.argv):
             print(info)
     save_image(artist.pastiche, args.output)
 
-    return os.EX_OK
+    return EXIT_SUCCESS
 
 
 if __name__ == '__main__':
