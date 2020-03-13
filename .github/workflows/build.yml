@@ -42,4 +42,4 @@ jobs:
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Test
-      run: pastiche --num-steps 200 example/boston.jpg example/vangogh_starry_night.jpg test-example.png
+      run: pastiche --num-steps 10 example/boston.jpg example/vangogh_starry_night.jpg test-example.png
