@@ -5,6 +5,7 @@ import random
 import sys
 import time
 from typing import Iterable, Optional, Sequence
+import warnings
 
 from PIL import Image
 import torch
@@ -23,12 +24,19 @@ with open(version_txt, 'r') as f:
 # * Utility
 # ************************************************************
 
-DEVICES = ['cpu']
-if torch.cuda.torch.cuda.is_available() and torch.cuda.device_count() > 0:
-    DEVICES.append('cuda')
-    for idx in range(torch.cuda.device_count()):
-        DEVICES.append('cuda:{}'.format(idx))
-DEVICES = tuple(DEVICES)
+def get_devices():
+    devices = ['cpu']
+    # As of PyTorch 1.7.0, calling torch.cuda.is_available shows a warning ("...Found no NVIDIA
+    # driver on your system..."). A related issue is reported in PyTorch Issue #47038.
+    # Warnings are suppressed below to prevent a warning from showing when no GPU is available.
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        cuda_available = torch.cuda.is_available()
+    if cuda_available and torch.cuda.device_count() > 0:
+        devices.append('cuda')
+        for idx in range(torch.cuda.device_count()):
+            devices.append('cuda:{}'.format(idx))
+    return tuple(devices)
 
 EXIT_SUCCESS = 0
 
@@ -257,12 +265,13 @@ def _parse_args(argv):
         prog='pastiche',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
+    devices = get_devices()
 
     # General options
     parser.add_argument('--version',
                         action='version',
                         version='pastiche {}'.format(__version__))
-    parser.add_argument('--device', default='cuda' if 'cuda' in DEVICES else 'cpu', choices=DEVICES)
+    parser.add_argument('--device', default='cuda' if 'cuda' in devices else 'cpu', choices=devices)
     parser.add_argument('--seed', type=int, help='RNG seed.')
     parser.add_argument(
         '--deterministic', action='store_true', help='Avoid non-determinism where possible (at cost of speed).')
