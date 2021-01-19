@@ -190,60 +190,32 @@ class VGG19(nn.Module):
         self.block5_conv4.weight.data = torch.from_numpy(weights.block5_conv4_W)
         self.block5_conv4.bias.data = torch.from_numpy(weights.block5_conv4_b)
 
+        self.device_strategy = ['cpu'] * len(VGG19.LAYER_NAMES)
+
     def forward(self, input: torch.Tensor, output_layers: Iterable=LAYER_NAMES) -> dict:
+        output_layers = set(output_layers)
         output = {}
-
         x = input
-
-        x = output['block1_conv1'] = self.block1_conv1.forward(x)
-        x = output['block1_relu1'] = self.block1_relu1.forward(x)
-        x = output['block1_conv2'] = self.block1_conv2.forward(x)
-        x = output['block1_relu2'] = self.block1_relu2.forward(x)
-        x = output['block1_pool'] = self.block1_pool.forward(x)
-
-        x = output['block2_conv1'] = self.block2_conv1.forward(x)
-        x = output['block2_relu1'] = self.block2_relu1.forward(x)
-        x = output['block2_conv2'] = self.block2_conv2.forward(x)
-        x = output['block2_relu2'] = self.block2_relu2.forward(x)
-        x = output['block2_pool'] = self.block2_pool.forward(x)
-
-        x = output['block3_conv1'] = self.block3_conv1.forward(x)
-        x = output['block3_relu1'] = self.block3_relu1.forward(x)
-        x = output['block3_conv2'] = self.block3_conv2.forward(x)
-        x = output['block3_relu2'] = self.block3_relu2.forward(x)
-        x = output['block3_conv3'] = self.block3_conv3.forward(x)
-        x = output['block3_relu3'] = self.block3_relu3.forward(x)
-        x = output['block3_conv4'] = self.block3_conv4.forward(x)
-        x = output['block3_relu4'] = self.block3_relu4.forward(x)
-        x = output['block3_pool'] = self.block3_pool.forward(x)
-
-        x = output['block4_conv1'] = self.block4_conv1.forward(x)
-        x = output['block4_relu1'] = self.block4_relu1.forward(x)
-        x = output['block4_conv2'] = self.block4_conv2.forward(x)
-        x = output['block4_relu2'] = self.block4_relu2.forward(x)
-        x = output['block4_conv3'] = self.block4_conv3.forward(x)
-        x = output['block4_relu3'] = self.block4_relu3.forward(x)
-        x = output['block4_conv4'] = self.block4_conv4.forward(x)
-        x = output['block4_relu4'] = self.block4_relu4.forward(x)
-        x = output['block4_pool'] = self.block4_pool.forward(x)
-
-        x = output['block5_conv1'] = self.block5_conv1.forward(x)
-        x = output['block5_relu1'] = self.block5_relu1.forward(x)
-        x = output['block5_conv2'] = self.block5_conv2.forward(x)
-        x = output['block5_relu2'] = self.block5_relu2.forward(x)
-        x = output['block5_conv3'] = self.block5_conv3.forward(x)
-        x = output['block5_relu3'] = self.block5_relu3.forward(x)
-        x = output['block5_conv4'] = self.block5_conv4.forward(x)
-        x = output['block5_relu4'] = self.block5_relu4.forward(x)
-        x = output['block5_pool'] = self.block5_pool.forward(x)
-
-        output = {key: value for key, value in output.items() if key in output_layers}
-
-        if not input.requires_grad:
-            for key in output.keys():
-                output[key] = output[key].detach()
-
+        for idx, layer in enumerate(VGG19.LAYER_NAMES):
+            # The responsibility is on the caller to put the input on the expected device.
+            if idx > 0:
+                x = x.to(self.device_strategy[idx])
+            x = getattr(self, layer).forward(x)
+            if not input.requires_grad:
+                x = x.detach()
+            if layer in output_layers:
+                output[layer] = x
         return output
+
+    def to(self, *args, **kwargs):
+        raise RuntimeError('Unsupported. Use set_device_strategy().')
+
+    def set_device_strategy(self, device_strategy):
+        for idx, device in enumerate(device_strategy):
+            layer = VGG19.LAYER_NAMES[idx]
+            getattr(self, layer).to(device)
+        self.device_strategy = device_strategy
+        return self
 
     def save_quantized_bin(self, path):
         import kmeans1d  # Not required for general pastiche usage, just for generating quantized model.

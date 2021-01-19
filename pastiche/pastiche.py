@@ -167,22 +167,24 @@ class PasticheArtist:
             content_weights: Optional[Sequence]=None,
             style_weights: Optional[Sequence]=None,
             tv_weight: float=DEFAULT_TV_WEIGHT):
+        # Images must be moved to the device of the first computation
+        device = vgg19.block1_conv1.weight.device
         self.vgg19 = vgg19
-        self.pastiche = init.clone().requires_grad_()
-        self.content = content
-        self.style = style
+        self.pastiche = init.clone().to(device).requires_grad_()
         self.optimizer = optim.LBFGS([self.pastiche], max_iter=1)
         self.content_layers = content_layers
         self.style_layers = style_layers
-        self.content_targets = self.vgg19.forward(self.content, self.content_layers)
-        self.style_targets = self.vgg19.forward(self.style, self.style_layers)
+        self.content_targets = self.vgg19.forward(content.to(device), self.content_layers)
+        self.style_targets = self.vgg19.forward(style.to(device), self.style_layers)
         self.content_weights = content_weights
         self.style_weights = style_weights
         self.tv_weight = tv_weight
         self.loss = self._calc_loss().item()
 
     def _calc_loss(self):
-        loss = torch.tensor(0.0, requires_grad=True, device=self.vgg19.block1_conv1.weight.device)
+        # Using the CPU for loss calculations does not have a substantive impact, and
+        # accommodates multi-device scenarios without added complexity.
+        loss = torch.tensor(0.0, requires_grad=True, device='cpu')
 
         pastiche_layers = list(self.content_layers) + list(self.style_layers)
         pastiche_targets = self.vgg19.forward(self.pastiche, pastiche_layers)
@@ -197,7 +199,7 @@ class PasticheArtist:
                 weight = self.content_weights[idx]
             else:
                 weight = self.content_weights[-1]
-            loss = loss + weight * mse_loss(pastiche_act, content_act)
+            loss = loss + weight * mse_loss(pastiche_act, content_act).to('cpu')
 
         # style loss
         for idx, layer in enumerate(self.style_layers):
@@ -211,11 +213,11 @@ class PasticheArtist:
                 weight = self.style_weights[idx]
             else:
                 weight = self.style_weights[-1]
-            loss = loss + weight * mse_loss(pastiche_g, style_g.detach())
+            loss = loss + weight * mse_loss(pastiche_g, style_g.detach()).to('cpu')
 
         # total-variation loss
-        tv_loss = (self.pastiche[:,:,:,1:] - self.pastiche[:,:,:,:-1]).abs().sum()
-        tv_loss += (self.pastiche[:,:,1:,:] - self.pastiche[:,:,:-1,:]).abs().sum()
+        tv_loss = (self.pastiche[:,:,:,1:] - self.pastiche[:,:,:,:-1]).abs().sum().to('cpu')
+        tv_loss += (self.pastiche[:,:,1:,:] - self.pastiche[:,:,:-1,:]).abs().sum().to('cpu')
         loss = loss + self.tv_weight * tv_loss
 
         return loss
@@ -252,11 +254,11 @@ class _ListLayersAction(argparse.Action):
         super(_ListLayersAction, self).__init__(**kwargs)
 
     def __call__(self, parser, namespace, values, option_string=None):
-        idx_padding = len(str(len(VGG19.LAYER_NAMES)))
+        idx_padding = len(str(len(VGG19.LAYER_NAMES) - 1))
         for idx, name in enumerate(VGG19.LAYER_NAMES):
             if idx > 0 and name[:6] != VGG19.LAYER_NAMES[idx - 1][:6]:
                 print()
-            print(f'{idx + 1: >{idx_padding}}. {name}')
+            print(f'{idx: >{idx_padding}}. {name}')
         parser.exit()
 
 
@@ -271,7 +273,18 @@ def _parse_args(argv):
     parser.add_argument('--version',
                         action='version',
                         version='pastiche {}'.format(__version__))
-    parser.add_argument('--device', default='cuda' if 'cuda' in devices else 'cpu', choices=devices)
+    parser.add_argument(
+        '--devices',
+        nargs='+',
+        default=list(('cuda' if 'cuda' in devices else 'cpu',)),
+        choices=devices)
+    parser.add_argument(
+        '--device-assignments',
+        nargs='+',
+        type=int,
+        default=list((0,)),
+        choices=range(len(VGG19.LAYER_NAMES) - 1),
+        help='Specifies the layer indices for which corresponding device computations start.')
     parser.add_argument('--seed', type=int, help='RNG seed.')
     parser.add_argument(
         '--deterministic', action='store_true', help='Avoid non-determinism where possible (at cost of speed).')
@@ -323,19 +336,34 @@ def _parse_args(argv):
         help='Maximum dimension for style image. Overrides --style-size-pixels when present.')
     parser.add_argument('--preserve-color', action='store_true', help='Preserve color of content image.')
     # Required options
-    parser.add_argument('content', help='File path to the content image.')
-    parser.add_argument('style', help='File path to the style image.')
-    parser.add_argument('output', help='File path to save the PNG image.')
+    parser.add_argument('--content', required=True, help='File path to the content image.')
+    parser.add_argument('--style', required=True, help='File path to the style image.')
+    parser.add_argument('--output', required=True, help='File path to save the PNG image.')
 
     args = parser.parse_args(argv[1:])
     return args
 
 
+def check_args(args):
+    if not args.output.lower().endswith('.png'):
+        sys.stderr.write('Output file is missing PNG extension.\n')
+    if args.device_assignments[0] != 0:
+        sys.stderr.write('The first device assignment index must be 0\n')
+        sys.exit(1)
+    if len(set(args.device_assignments)) != len(args.device_assignments):
+        sys.stderr.write('Device assignment indices cannot be repeated.\n')
+        sys.exit(1)
+    if sorted(args.device_assignments) != args.device_assignments:
+        sys.stderr.write('Device assignment indices must be strictly increasing.\n')
+        sys.exit(1)
+    if len(args.devices) != len(args.device_assignments):
+        sys.stderr.write('Mismatched number of devices and number of device assignment indices.\n')
+
+
 def main(argv=sys.argv):
     start_time = time.time()
     args = _parse_args(argv)
-    if not args.output.lower().endswith('.png'):
-        sys.stderr.write('Output file is missing PNG extension.\n')
+    check_args(args)
     seed = args.seed
     if seed is None:
         seed = random.randint(0, 2 ** 32 - 1)
@@ -345,20 +373,28 @@ def main(argv=sys.argv):
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
 
+    # 'device_strategy' maps layer indices to devices
+    device_strategy = [None] * len(VGG19.LAYER_NAMES)
+    end = len(VGG19.LAYER_NAMES)
+    for start, device in reversed(list(zip(args.device_assignments, args.devices))):
+        for idx in range(start, end):
+            device_strategy[idx] = device
+        end = start
+
     vgg19_q_bin_path = os.path.join(
         os.path.dirname(__file__), 'vgg19_weights_tf_dim_ordering_tf_kernels_notop_q.bin')
-    vgg19 = VGG19.from_quantized_bin(vgg19_q_bin_path).to(args.device)
-    content = load_image(args.content, pixels=args.size_pixels, size=args.size).to(args.device)
+    vgg19 = VGG19.from_quantized_bin(vgg19_q_bin_path).set_device_strategy(device_strategy)
+    content = load_image(args.content, pixels=args.size_pixels, size=args.size)
     style_pixels = args.style_size_pixels
     if style_pixels is None:
         style_pixels = content.shape[2] * content.shape[3]
-    style = load_image(args.style, pixels=style_pixels, size=args.style_size).to(args.device)
+    style = load_image(args.style, pixels=style_pixels, size=args.style_size)
     if args.preserve_color:
         style.data = transfer_color(content, style)
     if args.random_init:
         init = torch.randn(content.shape, device='cuda')
     elif args.init is not None:
-        init = load_image(args.init, size=content.shape[2:]).to(args.device)
+        init = load_image(args.init, size=content.shape[2:])
     else:
         init = content.clone()
 
@@ -373,7 +409,7 @@ def main(argv=sys.argv):
     # The 0th step does nothing, which is why there are (args.num_steps + 1) total steps
     max_step_str_width = len(str(args.num_steps))
     if args.verbose:
-        print(f'device: {args.device}')
+        print(f'device_strategy: {dict(zip(args.device_assignments, args.devices))}')
         print(f'seed: {seed}')
         print(f'size: {"x".join(str(x) for x in reversed(content.shape[2:]))}')
         print(f'style_size: {"x".join(str(x) for x in reversed(style.shape[2:]))}')
