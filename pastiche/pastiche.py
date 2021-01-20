@@ -1,4 +1,6 @@
 import argparse
+from collections import defaultdict
+from itertools import groupby
 import math
 import os
 import random
@@ -268,23 +270,27 @@ def _parse_args(argv):
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     devices = get_devices()
+    last_layer_idx = len(VGG19.LAYER_NAMES) - 1
 
     # General options
     parser.add_argument('--version',
                         action='version',
                         version='pastiche {}'.format(__version__))
     parser.add_argument(
-        '--devices',
-        nargs='+',
-        default=list(('cuda' if 'cuda' in devices else 'cpu',)),
+        '--device', '-d',
+        help='Primary device to use for computations. Additional devices can be specified with --supplemental-device.',
+        default='cuda' if 'cuda' in devices else 'cpu',
         choices=devices)
     parser.add_argument(
-        '--device-assignments',
-        nargs='+',
-        type=int,
-        default=list((0,)),
-        choices=range(len(VGG19.LAYER_NAMES) - 1),
-        help='Specifies the layer indices for which corresponding device computations start.')
+        '--supplemental-device',
+        nargs=2,
+        metavar=('DEVICE', 'INDEX'),
+        action='append',
+        help='Supplemental device to use for computations along with a layer index specifying the first layer for'
+             ' which the device will be used. The --supplemental-device argument can be repeated. For example,'
+             ' "--device cuda:0 --supplemental-device cuda:1 10 --supplemental-device cpu 30" configures GPU 0 for'
+             f' layers 0 through 9, GPU 1 for layers 10 through 29, and the CPU for layers 30 through {last_layer_idx}.'
+             f' Available devices: {", ".join(devices)}. Available layer indices: 1 through {last_layer_idx}.')
     parser.add_argument('--seed', type=int, help='RNG seed.')
     parser.add_argument(
         '--deterministic', action='store_true', help='Avoid non-determinism where possible (at cost of speed).')
@@ -341,29 +347,51 @@ def _parse_args(argv):
     parser.add_argument('--output', required=True, help='File path to save the PNG image.')
 
     args = parser.parse_args(argv[1:])
+
+    if not args.output.lower().endswith('.png'):
+        sys.stderr.write('Output file is missing PNG extension.\n')
+        # Intentionally not exiting after warning, as processing can proceed even though the output
+        # file doesn't have the expected extension. The saved file contents will be a PNG image.
+    for supplemental_device in args.supplemental_device:
+        try:
+            supplemental_device[1] = int(supplemental_device[1])
+        except ValueError:
+            sys.stderr.write(f'Invalid --supplemental-device layer index: {supplemental_device[1]}\n')
+            sys.exit(1)
+    for device, idx in args.supplemental_device:
+        if device not in devices:
+            sys.stderr.write(f'Invalid --supplemental-device device: {device}\n')
+            sys.exit(1)
+        if idx <= 0 or idx > last_layer_idx:
+            sys.stderr.write(f'Invalid --supplemental-device layer index: {idx}\n')
+            sys.exit(1)
+    supp_device_layer_indices = sorted([idx for _, idx in args.supplemental_device])
+    for idx1, idx2 in zip(supp_device_layer_indices, supp_device_layer_indices[1:]):
+        if idx1 == idx2:
+            sys.stderr.write(f'Repeated --supplemental-device layer index: {idx1}\n')
+            sys.exit(1)
+
     return args
 
 
-def check_args(args):
-    if not args.output.lower().endswith('.png'):
-        sys.stderr.write('Output file is missing PNG extension.\n')
-    if args.device_assignments[0] != 0:
-        sys.stderr.write('The first device assignment index must be 0\n')
-        sys.exit(1)
-    if len(set(args.device_assignments)) != len(args.device_assignments):
-        sys.stderr.write('Device assignment indices cannot be repeated.\n')
-        sys.exit(1)
-    if sorted(args.device_assignments) != args.device_assignments:
-        sys.stderr.write('Device assignment indices must be strictly increasing.\n')
-        sys.exit(1)
-    if len(args.devices) != len(args.device_assignments):
-        sys.stderr.write('Mismatched number of devices and number of device assignment indices.\n')
+def device_layer_config(device_strategy):
+    allocations = defaultdict(list)
+    idx = 0
+    for device, grouper in groupby(device_strategy):
+        num_layers = len(list(grouper))
+        bounds = [str(idx)]
+        if num_layers > 1:
+            bounds.append(str(idx + num_layers - 1))
+        allocations[device].append('-'.join(bounds))
+        idx += num_layers
+    allocations = [f'{device} {",".join(layer_ranges)}' for device, layer_ranges in allocations.items()]
+    allocations = ' | '.join(allocations)
+    return allocations
 
 
 def main(argv=sys.argv):
     start_time = time.time()
     args = _parse_args(argv)
-    check_args(args)
     seed = args.seed
     if seed is None:
         seed = random.randint(0, 2 ** 32 - 1)
@@ -373,10 +401,11 @@ def main(argv=sys.argv):
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
 
+    # Configure the device strategy.
     # 'device_strategy' maps layer indices to devices
-    device_strategy = [None] * len(VGG19.LAYER_NAMES)
+    device_strategy = [args.device] * len(VGG19.LAYER_NAMES)
     end = len(VGG19.LAYER_NAMES)
-    for start, device in reversed(list(zip(args.device_assignments, args.devices))):
+    for device, start in sorted(args.supplemental_device, key=lambda x: x[1], reverse=True):
         for idx in range(start, end):
             device_strategy[idx] = device
         end = start
@@ -409,7 +438,7 @@ def main(argv=sys.argv):
     # The 0th step does nothing, which is why there are (args.num_steps + 1) total steps
     max_step_str_width = len(str(args.num_steps))
     if args.verbose:
-        print(f'device_strategy: {dict(zip(args.device_assignments, args.devices))}')
+        print(f'device_layer_config: {device_layer_config(device_strategy)}')
         print(f'seed: {seed}')
         print(f'size: {"x".join(str(x) for x in reversed(content.shape[2:]))}')
         print(f'style_size: {"x".join(str(x) for x in reversed(style.shape[2:]))}')
