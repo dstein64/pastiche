@@ -6,7 +6,7 @@ import os
 import random
 import sys
 import time
-from typing import Iterable, Optional, Sequence
+from typing import Iterable, Optional, Sequence, List
 import warnings
 
 from PIL import Image
@@ -160,19 +160,62 @@ def transfer_color(source, target):
 class PasticheArtist:
     def __init__(
             self,
-            vgg19: VGG19,
-            pastiche: torch.Tensor,
-            content_targets: torch.Tensor,
-            style_targetss: Iterable[torch.Tensor],
+            content: str,
+            styles: str,
+            random_init: bool=False,
+            init: Optional[str]=None,
+            device: str='cuda' if 'cuda' in get_devices() else 'cpu',
+            supplemental_devices: Optional[List[List]]=None,
+            preserve_color: bool=False,
             content_layers: Iterable=DEFAULT_CONTENT_LAYERS,
             style_layers: Iterable=DEFAULT_STYLE_LAYERS,
             content_layer_weights: Optional[Sequence]=None,
             style_layer_weights: Optional[Sequence]=None,
             content_weight: float=1.0,
-            style_weights: Iterable[float]=list(),
-            tv_weight: float=DEFAULT_TV_WEIGHT):
+            style_weights: Optional[Sequence]=None,
+            tv_weight: float=DEFAULT_TV_WEIGHT,
+            size_pixels: Optional[int]=None,
+            size=None,
+            style_size_pixels: Optional[int]=None,
+            style_size=None):
+        if supplemental_devices is None:
+            supplemental_devices = []
+        # Configure the device strategy.
+        # 'device_strategy' maps layer indices to devices
+        self.device_strategy = [device] * len(VGG19.LAYER_NAMES)
+        end = len(VGG19.LAYER_NAMES)
+        for device, start in sorted(supplemental_devices, key=lambda x: x[1], reverse=True):
+            for idx in range(start, end):
+                self.device_strategy[idx] = device
+            end = start
+        vgg19_q_bin_path = os.path.join(
+            os.path.dirname(__file__), 'vgg19_weights_tf_dim_ordering_tf_kernels_notop_q.bin')
+        vgg19 = VGG19.from_quantized_bin(vgg19_q_bin_path).set_device_strategy(self.device_strategy)
+        content = load_image(content, pixels=size_pixels, size=size)
+        self.content_size = list(content.shape[2:])
+        content_targets = vgg19.forward(content.to(device), content_layers)
+        style_pixels = style_size_pixels
+        if style_pixels is None:
+            style_pixels = self.content_size[0] * self.content_size[1]
+        style_targetss = []
+        self.style_sizes = []
+        for path in styles:
+            style = load_image(path, pixels=style_pixels, size=style_size)
+            self.style_sizes.append(list(style.shape[2:]))
+            if preserve_color:
+                style.data = transfer_color(content, style)
+            style_targetss.append(vgg19.forward(style.to(device), style_layers))
+            del style
+        if random_init:
+            self.pastiche = torch.randn(content.shape, device=device)
+        elif init is not None:
+            self.pastiche = load_image(init, size=self.content_size).to(device)
+        else:
+            self.pastiche = content.to(device, copy=True)
+        self.pastiche.requires_grad_()
+        del content
+
         self.vgg19 = vgg19
-        self.pastiche = pastiche
         self.optimizer = optim.LBFGS([self.pastiche], max_iter=1)
         self.content_layers = content_layers
         self.style_layers = style_layers
@@ -182,8 +225,24 @@ class PasticheArtist:
         self.style_layer_weights = style_layer_weights
         self.content_weight = content_weight
         self.style_weights = style_weights
+        if self.style_weights is None:
+            self.style_weights = []
         self.tv_weight = tv_weight
         self.loss = self._calc_loss().item()
+
+    def device_layers_reprs(self):
+        """Returns a dictionary mapping devices to a string representation of assigned layers."""
+        map = defaultdict(list)
+        idx = 0
+        for device, grouper in groupby(self.device_strategy):
+            num_layers = len(list(grouper))
+            repr_ = str(idx)
+            if num_layers > 1:
+                repr_ = f'{repr_}-{idx + num_layers - 1}'
+            map[device].append(repr_)
+            idx += num_layers
+        output = {key: ','.join(value) for key, value in map.items()}
+        return output
 
     def _calc_loss(self):
         # Using the CPU for loss calculations does not have a substantive impact when using GPU
@@ -424,21 +483,6 @@ def _parse_args(argv):
     return args
 
 
-def device_layers_repr(device_strategy):
-    """Returns a dictionary mapping devices to a string representation of assigned layers."""
-    map = defaultdict(list)
-    idx = 0
-    for device, grouper in groupby(device_strategy):
-        num_layers = len(list(grouper))
-        repr_ = str(idx)
-        if num_layers > 1:
-            repr_ = f'{repr_}-{idx + num_layers - 1}'
-        map[device].append(repr_)
-        idx += num_layers
-    output = {key: ','.join(value) for key, value in map.items()}
-    return output
-
-
 def main(argv=sys.argv):
     start_time = time.time()
     args = _parse_args(argv)
@@ -451,61 +495,35 @@ def main(argv=sys.argv):
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
 
-    # Configure the device strategy.
-    # 'device_strategy' maps layer indices to devices
-    device_strategy = [args.device] * len(VGG19.LAYER_NAMES)
-    end = len(VGG19.LAYER_NAMES)
-    for device, start in sorted(args.supplemental_devices, key=lambda x: x[1], reverse=True):
-        for idx in range(start, end):
-            device_strategy[idx] = device
-        end = start
-
-    vgg19_q_bin_path = os.path.join(
-        os.path.dirname(__file__), 'vgg19_weights_tf_dim_ordering_tf_kernels_notop_q.bin')
-    vgg19 = VGG19.from_quantized_bin(vgg19_q_bin_path).set_device_strategy(device_strategy)
-    content = load_image(args.content, pixels=args.size_pixels, size=args.size)
-    content_size = list(content.shape[2:])
-    content_targets = vgg19.forward(content.to(args.device), args.content_layers)
-    style_pixels = args.style_size_pixels
-    if style_pixels is None:
-        style_pixels = content_size[0] * content_size[1]
-    style_targetss = []
-    style_sizes = []
-    for path in args.styles:
-        style = load_image(path, pixels=style_pixels, size=args.style_size)
-        style_sizes.append(list(style.shape[2:]))
-        if args.preserve_color:
-            style.data = transfer_color(content, style)
-        style_targetss.append(vgg19.forward(style.to(args.device), args.style_layers))
-        del style
-    if args.random_init:
-        pastiche = torch.randn(content.shape, device=args.device)
-    elif args.init is not None:
-        pastiche = load_image(args.init, size=content_size).to(args.device)
-    else:
-        pastiche = content.to(args.device, copy=True)
-    pastiche.requires_grad_()
-    del content
-
     artist = PasticheArtist(
-        vgg19, pastiche, content_targets, style_targetss,
+        args.content, args.styles,
+        device=args.device,
+        supplemental_devices=args.supplemental_devices,
+        random_init=args.random_init,
+        init=args.init,
+        preserve_color=args.preserve_color,
         content_layers=args.content_layers,
         style_layers=args.style_layers,
         content_layer_weights=args.content_layer_weights,
         style_layer_weights=args.style_layer_weights,
         content_weight=args.content_weight,
         style_weights=args.style_weights,
-        tv_weight=args.tv_weight)
+        tv_weight=args.tv_weight,
+        size_pixels=args.size_pixels,
+        size=args.size,
+        style_size_pixels=args.style_size_pixels,
+        style_size=args.style_size
+    )
 
     # The 0th step does nothing, which is why there are (args.num_steps + 1) total steps
     max_step_str_width = len(str(args.num_steps))
     if args.verbose:
-        for idx, (device, layers) in enumerate(device_layers_repr(device_strategy).items()):
+        for idx, (device, layers) in enumerate(artist.device_layers_reprs().items()):
             print(f'device[{idx}]: {device} ({layers})')
         print(f'seed: {seed}')
-        print(f'size: {"x".join(str(x) for x in reversed(content_size))}')
+        print(f'size: {"x".join(str(x) for x in reversed(artist.content_size))}')
         for idx in range(len(args.styles)):
-            print(f'style_size[{idx}]: {"x".join(str(x) for x in reversed(style_sizes[idx]))}')
+            print(f'style_size[{idx}]: {"x".join(str(x) for x in reversed(artist.style_sizes[idx]))}')
         print()
         print('step elapsed loss')
         print('---- ------- ----')
@@ -521,7 +539,7 @@ def main(argv=sys.argv):
             elapsed = time.time() - start_time
             info = f'{step: <4} {elapsed: <7.1f} {artist.loss:.2f}'
             print(info)
-    save_image(pastiche, args.output)
+    save_image(artist.pastiche, args.output)
 
     return EXIT_SUCCESS
 
