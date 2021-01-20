@@ -171,7 +171,7 @@ class PasticheArtist:
             styles: str,
             random_init: bool = False,
             init: Optional[str] = None,
-            device: str='cuda' if 'cuda' in get_devices() else 'cpu',
+            device: str = 'cuda' if 'cuda' in get_devices() else 'cpu',
             supplemental_devices: Optional[List[List]] = None,
             preserve_color: bool = False,
             content_layers: Iterable = DEFAULT_CONTENT_LAYERS,
@@ -180,11 +180,11 @@ class PasticheArtist:
             style_layer_weights: Optional[Sequence] = None,
             content_weight: float = 1.0,
             style_weights: Optional[Sequence] = None,
-            tv_weight: float=DEFAULT_TV_WEIGHT,
+            tv_weight: float = DEFAULT_TV_WEIGHT,
             size_pixels: Optional[int] = None,
-            size = None,
+            size=None,
             style_size_pixels: Optional[int] = None,
-            style_size = None):
+            style_size=None):
         if supplemental_devices is None:
             supplemental_devices = []
         # Configure the device strategy.
