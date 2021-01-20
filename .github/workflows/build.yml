@@ -15,7 +15,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
-        python-version: [3.6, 3.7, 3.8]
+        python-version: [3.6, 3.7, 3.8, 3.9]
 
     steps:
     - name: Checkout
@@ -47,4 +47,9 @@ jobs:
         pip install .
 
     - name: Test
-      run: pastiche --num-steps 10 example/boston.jpg example/vangogh_starry_night.jpg test-example.png
+      run: |
+        pastiche                                    \
+          --num-steps 10                            \
+          --content example/boston.jpg              \
+          --styles example/vangogh_starry_night.jpg \
+          --output test-example.png
