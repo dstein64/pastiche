@@ -193,10 +193,12 @@ class VGG19(nn.Module):
         self.device_strategy = ['cpu'] * len(VGG19.LAYER_NAMES)
 
     def forward(self, input: torch.Tensor, output_layers: Iterable=LAYER_NAMES) -> dict:
+        idx_lookup = dict(zip(VGG19.LAYER_NAMES, range(len(VGG19.LAYER_NAMES))))
+        last_layer = max(idx_lookup[layer] for layer in output_layers)
         output_layers = set(output_layers)
         output = {}
         x = input
-        for idx, layer in enumerate(VGG19.LAYER_NAMES):
+        for idx, layer in enumerate(VGG19.LAYER_NAMES[:last_layer + 1]):
             # The responsibility is on the caller to put the input on the expected device.
             if idx > 0:
                 x = x.to(self.device_strategy[idx])

@@ -161,31 +161,33 @@ class PasticheArtist:
     def __init__(
             self,
             vgg19: VGG19,
-            init: torch.Tensor,
-            content: torch.Tensor,
-            style: torch.Tensor,
+            pastiche: torch.Tensor,
+            content_targets: torch.Tensor,
+            style_targetss: Iterable[torch.Tensor],
             content_layers: Iterable=DEFAULT_CONTENT_LAYERS,
             style_layers: Iterable=DEFAULT_STYLE_LAYERS,
-            content_weights: Optional[Sequence]=None,
-            style_weights: Optional[Sequence]=None,
+            content_layer_weights: Optional[Sequence]=None,
+            style_layer_weights: Optional[Sequence]=None,
+            content_weight: float=1.0,
+            style_weights: Iterable[float]=list(),
             tv_weight: float=DEFAULT_TV_WEIGHT):
-        # Images must be moved to the device of the first computation
-        device = vgg19.block1_conv1.weight.device
         self.vgg19 = vgg19
-        self.pastiche = init.clone().to(device).requires_grad_()
+        self.pastiche = pastiche
         self.optimizer = optim.LBFGS([self.pastiche], max_iter=1)
         self.content_layers = content_layers
         self.style_layers = style_layers
-        self.content_targets = self.vgg19.forward(content.to(device), self.content_layers)
-        self.style_targets = self.vgg19.forward(style.to(device), self.style_layers)
-        self.content_weights = content_weights
+        self.content_targets = content_targets
+        self.style_targetss = style_targetss
+        self.content_layer_weights = content_layer_weights
+        self.style_layer_weights = style_layer_weights
+        self.content_weight = content_weight
         self.style_weights = style_weights
         self.tv_weight = tv_weight
         self.loss = self._calc_loss().item()
 
     def _calc_loss(self):
-        # Using the CPU for loss calculations does not have a substantive impact, and
-        # accommodates multi-device scenarios without added complexity.
+        # Using the CPU for loss calculations does not have a substantive impact when using GPU
+        # elsewhere, and accommodates multi-device scenarios without added complexity.
         loss = torch.tensor(0.0, requires_grad=True, device='cpu')
 
         pastiche_layers = list(self.content_layers) + list(self.style_layers)
@@ -195,27 +197,33 @@ class PasticheArtist:
         for idx, layer in enumerate(self.content_layers):
             pastiche_act = pastiche_targets[layer]
             content_act = self.content_targets[layer]
-            if self.content_weights is None or len(self.content_weights) == 0:
-                weight = 1.0
-            elif len(self.content_weights) > idx:
-                weight = self.content_weights[idx]
+            if self.content_layer_weights is None or len(self.content_layer_weights) == 0:
+                layer_weight = 1.0
+            elif len(self.content_layer_weights) > idx:
+                layer_weight = self.content_layer_weights[idx]
             else:
-                weight = self.content_weights[-1]
-            loss = loss + weight * mse_loss(pastiche_act, content_act).to('cpu')
+                layer_weight = self.content_layer_weights[-1]
+            layer_loss = layer_weight * mse_loss(pastiche_act, content_act).to('cpu')
+            loss = loss + self.content_weight * layer_loss
 
         # style loss
-        for idx, layer in enumerate(self.style_layers):
-            pastiche_act = pastiche_targets[layer]
-            style_act = self.style_targets[layer]
-            pastiche_g = gram(pastiche_act)
-            style_g = gram(style_act)
-            if self.style_weights is None or len(self.style_weights) == 0:
-                weight = 1e3 / (pastiche_act.shape[1] ** 2)
-            elif len(self.style_weights) > idx:
-                weight = self.style_weights[idx]
-            else:
-                weight = self.style_weights[-1]
-            loss = loss + weight * mse_loss(pastiche_g, style_g.detach()).to('cpu')
+        for style_idx, style_targets in enumerate(self.style_targetss):
+            style_weight = 1.0 / len(self.style_targetss)
+            if style_idx < len(self.style_weights):
+                style_weight = self.style_weights[style_idx]
+            for layer_idx, layer in enumerate(self.style_layers):
+                pastiche_act = pastiche_targets[layer]
+                style_act = style_targets[layer]
+                pastiche_g = gram(pastiche_act)
+                style_g = gram(style_act)
+                if self.style_layer_weights is None or len(self.style_layer_weights) == 0:
+                    layer_weight = 1e3 / (pastiche_act.shape[1] ** 2)
+                elif len(self.style_layer_weights) > layer_idx:
+                    layer_weight = self.style_layer_weights[layer_idx]
+                else:
+                    layer_weight = self.style_layer_weights[-1]
+                layer_loss = layer_weight * mse_loss(pastiche_g, style_g.detach()).to('cpu')
+                loss = loss + style_weight * layer_loss
 
         # total-variation loss
         tv_loss = (self.pastiche[:,:,:,1:] - self.pastiche[:,:,:,:-1]).abs().sum().to('cpu')
@@ -225,6 +233,7 @@ class PasticheArtist:
         return loss
 
     def draw(self):
+        assert self.pastiche.requires_grad
         def closure():
             self.optimizer.zero_grad()
             loss = self._calc_loss()
@@ -273,14 +282,17 @@ def _parse_args(argv):
     last_layer_idx = len(VGG19.LAYER_NAMES) - 1
 
     # General options
-    parser.add_argument('--version',
-                        action='version',
-                        version='pastiche {}'.format(__version__))
+    parser.add_argument(
+        '--version',
+        action='version',
+        version='pastiche {}'.format(__version__)
+    )
     parser.add_argument(
         '--device', '-d',
         help='Primary device to use for computations. Additional devices can be specified with --supplemental-device.',
         default='cuda' if 'cuda' in devices else 'cpu',
-        choices=devices)
+        choices=devices
+    )
     parser.add_argument(
         '--supplemental-device',
         nargs=2,
@@ -290,7 +302,8 @@ def _parse_args(argv):
              ' which the device will be used. The --supplemental-device argument can be repeated. For example,'
              ' "--device cuda:0 --supplemental-device cuda:1 10 --supplemental-device cpu 30" configures GPU 0 for'
              f' layers 0 through 9, GPU 1 for layers 10 through 29, and the CPU for layers 30 through {last_layer_idx}.'
-             f' Available devices: {", ".join(devices)}. Available layer indices: 1 through {last_layer_idx}.')
+             f' Available devices: {", ".join(devices)}. Available layer indices: 1 through {last_layer_idx}.'
+    )
     parser.add_argument('--seed', type=int, help='RNG seed.')
     parser.add_argument(
         '--deterministic', action='store_true', help='Avoid non-determinism where possible (at cost of speed).')
@@ -304,16 +317,42 @@ def _parse_args(argv):
         metavar='LAYER_NAME',
         nargs='*',
         default=DEFAULT_CONTENT_LAYERS,
-        help='Content layer names. Use --list-layers to show a list of choices.')
+        help='Content layer names. Use --list-layers to show a list of choices.'
+    )
     parser.add_argument(
         '--style-layers',
         choices=VGG19.LAYER_NAMES,
         metavar='LAYER_NAME',
         nargs='*',
         default=DEFAULT_STYLE_LAYERS,
-        help='Style layer names. Use --list-layers to show a list of choices.')
-    parser.add_argument('--content-weights', metavar='WEIGHT', nargs='*', type=float)
-    parser.add_argument('--style-weights', metavar='WEIGHT', nargs='*', type=float)
+        help='Style layer names. Use --list-layers to show a list of choices.'
+    )
+    parser.add_argument(
+        '--content-layer-weights',
+        metavar='WEIGHT',
+        nargs='*',
+        type=float,
+        help='Weights corresponding to --content-layers.'
+    )
+    parser.add_argument(
+        '--style-layer-weights',
+        metavar='WEIGHT',
+        nargs='*',
+        type=float,
+        help='Weights corresponding to --style-layers.'
+    )
+    parser.add_argument(
+        '--content-weight',
+        type=float,
+        default=1.0,
+        help='Content image weighting.'
+    )
+    parser.add_argument(
+        '--style-weights',
+        type=float,
+        nargs='*',
+        help='Style image(s) weighting. Defaults to 1/N for each of N style images.'
+    )
     parser.add_argument('--tv-weight', default=DEFAULT_TV_WEIGHT, type=float, help='Total-variation weight')
     # Output options
     parser.add_argument('--no-verbose', action='store_false', dest='verbose')
@@ -335,22 +374,31 @@ def _parse_args(argv):
     parser.add_argument(
         '--style-size-pixels',
         type=int,
-        help='Approximate number of pixels for style image.')
+        help='Approximate number of pixels for style image(s).')
     parser.add_argument(
         '--style-size',
         type=int,
-        help='Maximum dimension for style image. Overrides --style-size-pixels when present.')
+        help='Maximum dimension for style image(s). Overrides --style-size-pixels when present.')
     parser.add_argument('--preserve-color', action='store_true', help='Preserve color of content image.')
     # Required options
-    parser.add_argument('--content', required=True, help='File path to the content image.')
-    parser.add_argument('--style', required=True, help='File path to the style image.')
-    parser.add_argument('--output', required=True, help='File path to save the PNG image.')
+    # Flags are used instead of requiring positional arguments to prevent ambiguity when such arguments are
+    # preceded by an argument with a variable number of inputs (e.g., nargs='*'). This was deemed preferable
+    # to requiring a '--' separator to resolve such ambiguities.
+    parser.add_argument('--content', '-c', required=True, help='File path to the content image.')
+    parser.add_argument('--style', '-s', nargs='+', required=True, help='File path(s) to the style image(s).')
+    parser.add_argument('--output', '-o', required=True, help='File path to save the PNG image.')
 
     args = parser.parse_args(argv[1:])
+    if args.supplemental_device is None:
+        args.supplemental_device = []
+    if args.style_weights is None:
+        args.style_weights = []
+    if len(args.style_weights) < len(args.style):
+        args.style_weights.append(1.0 / len(args.style))
 
     if not args.output.lower().endswith('.png'):
         sys.stderr.write('Output file is missing PNG extension.\n')
-        # Intentionally not exiting after warning, as processing can proceed even though the output
+        # Intentionally no exit after warning, as processing can proceed even though the output
         # file doesn't have the expected extension. The saved file contents will be a PNG image.
     for supplemental_device in args.supplemental_device:
         try:
@@ -374,19 +422,19 @@ def _parse_args(argv):
     return args
 
 
-def device_layer_config(device_strategy):
-    allocations = defaultdict(list)
+def device_layers_repr(device_strategy):
+    """Returns a dictionary mapping devices to a string representation of assigned layers."""
+    map = defaultdict(list)
     idx = 0
     for device, grouper in groupby(device_strategy):
         num_layers = len(list(grouper))
         bounds = [str(idx)]
         if num_layers > 1:
             bounds.append(str(idx + num_layers - 1))
-        allocations[device].append('-'.join(bounds))
+        map[device].append('-'.join(bounds))
         idx += num_layers
-    allocations = [f'{device} {",".join(layer_ranges)}' for device, layer_ranges in allocations.items()]
-    allocations = ' | '.join(allocations)
-    return allocations
+    output = {key: ','.join(value) for key, value in map.items()}
+    return output
 
 
 def main(argv=sys.argv):
@@ -414,34 +462,48 @@ def main(argv=sys.argv):
         os.path.dirname(__file__), 'vgg19_weights_tf_dim_ordering_tf_kernels_notop_q.bin')
     vgg19 = VGG19.from_quantized_bin(vgg19_q_bin_path).set_device_strategy(device_strategy)
     content = load_image(args.content, pixels=args.size_pixels, size=args.size)
+    content_size = list(content.shape[2:])
+    content_targets = vgg19.forward(content.to(args.device), args.content_layers)
     style_pixels = args.style_size_pixels
     if style_pixels is None:
-        style_pixels = content.shape[2] * content.shape[3]
-    style = load_image(args.style, pixels=style_pixels, size=args.style_size)
-    if args.preserve_color:
-        style.data = transfer_color(content, style)
+        style_pixels = content_size[0] * content_size[1]
+    style_targetss = []
+    style_sizes = []
+    for path in args.style:
+        style = load_image(path, pixels=style_pixels, size=args.style_size)
+        style_sizes.append(list(style.shape[2:]))
+        if args.preserve_color:
+            style.data = transfer_color(content, style)
+        style_targetss.append(vgg19.forward(style.to(args.device), args.style_layers))
+        del style
     if args.random_init:
-        init = torch.randn(content.shape, device='cuda')
+        pastiche = torch.randn(content.shape, device=args.device)
     elif args.init is not None:
-        init = load_image(args.init, size=content.shape[2:])
+        pastiche = load_image(args.init, size=content_size).to(args.device)
     else:
-        init = content.clone()
+        pastiche = content.to(args.device, copy=True)
+    pastiche.requires_grad_()
+    del content
 
     artist = PasticheArtist(
-        vgg19, init, content, style,
+        vgg19, pastiche, content_targets, style_targetss,
         content_layers=args.content_layers,
         style_layers=args.style_layers,
-        content_weights=args.content_weights,
+        content_layer_weights=args.content_layer_weights,
+        style_layer_weights=args.style_layer_weights,
+        content_weight=args.content_weight,
         style_weights=args.style_weights,
         tv_weight=args.tv_weight)
 
     # The 0th step does nothing, which is why there are (args.num_steps + 1) total steps
     max_step_str_width = len(str(args.num_steps))
     if args.verbose:
-        print(f'device_layer_config: {device_layer_config(device_strategy)}')
+        for idx, (device, layers) in enumerate(device_layers_repr(device_strategy).items()):
+            print(f'device[{idx}]: {device} ({layers})')
         print(f'seed: {seed}')
-        print(f'size: {"x".join(str(x) for x in reversed(content.shape[2:]))}')
-        print(f'style_size: {"x".join(str(x) for x in reversed(style.shape[2:]))}')
+        print(f'size: {"x".join(str(x) for x in reversed(content_size))}')
+        for idx in range(len(args.style)):
+            print(f'style_size[{idx}]: {"x".join(str(x) for x in reversed(style_sizes[idx]))}')
         print()
         print('step elapsed loss')
         print('---- ------- ----')
@@ -457,7 +519,7 @@ def main(argv=sys.argv):
             elapsed = time.time() - start_time
             info = f'{step: <4} {elapsed: <7.1f} {artist.loss:.2f}'
             print(info)
-    save_image(artist.pastiche, args.output)
+    save_image(pastiche, args.output)
 
     return EXIT_SUCCESS
 
