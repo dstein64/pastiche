@@ -40,6 +40,7 @@ def get_devices():
             devices.append('cuda:{}'.format(idx))
     return tuple(devices)
 
+
 EXIT_SUCCESS = 0
 
 # ************************************************************
@@ -168,22 +169,22 @@ class PasticheArtist:
             self,
             content: str,
             styles: str,
-            random_init: bool=False,
-            init: Optional[str]=None,
+            random_init: bool = False,
+            init: Optional[str] = None,
             device: str='cuda' if 'cuda' in get_devices() else 'cpu',
-            supplemental_devices: Optional[List[List]]=None,
-            preserve_color: bool=False,
-            content_layers: Iterable=DEFAULT_CONTENT_LAYERS,
-            style_layers: Iterable=DEFAULT_STYLE_LAYERS,
-            content_layer_weights: Optional[Sequence]=None,
-            style_layer_weights: Optional[Sequence]=None,
-            content_weight: float=1.0,
-            style_weights: Optional[Sequence]=None,
+            supplemental_devices: Optional[List[List]] = None,
+            preserve_color: bool = False,
+            content_layers: Iterable = DEFAULT_CONTENT_LAYERS,
+            style_layers: Iterable = DEFAULT_STYLE_LAYERS,
+            content_layer_weights: Optional[Sequence] = None,
+            style_layer_weights: Optional[Sequence] = None,
+            content_weight: float = 1.0,
+            style_weights: Optional[Sequence] = None,
             tv_weight: float=DEFAULT_TV_WEIGHT,
-            size_pixels: Optional[int]=None,
-            size=None,
-            style_size_pixels: Optional[int]=None,
-            style_size=None):
+            size_pixels: Optional[int] = None,
+            size = None,
+            style_size_pixels: Optional[int] = None,
+            style_size = None):
         if supplemental_devices is None:
             supplemental_devices = []
         # Configure the device strategy.
@@ -296,14 +297,15 @@ class PasticheArtist:
                 loss = loss + style_weight * layer_loss
 
         # total-variation loss
-        tv_loss = (self.pastiche[:,:,:,1:] - self.pastiche[:,:,:,:-1]).abs().sum().to('cpu')
-        tv_loss += (self.pastiche[:,:,1:,:] - self.pastiche[:,:,:-1,:]).abs().sum().to('cpu')
+        tv_loss = (self.pastiche[:, :, :, 1:] - self.pastiche[:, :, :, :-1]).abs().sum().to('cpu')
+        tv_loss += (self.pastiche[:, :, 1:, :] - self.pastiche[:, :, :-1, :]).abs().sum().to('cpu')
         loss = loss + self.tv_weight * tv_loss
 
         return loss
 
     def draw(self):
         assert self.pastiche.requires_grad
+
         def closure():
             self.optimizer.zero_grad()
             loss = self._calc_loss()

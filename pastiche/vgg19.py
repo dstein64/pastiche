@@ -194,7 +194,7 @@ class VGG19(nn.Module):
 
         self.device_strategy = ['cpu'] * len(VGG19.LAYER_NAMES)
 
-    def forward(self, input: torch.Tensor, output_layers: Iterable=LAYER_NAMES) -> dict:
+    def forward(self, input: torch.Tensor, output_layers: Iterable = LAYER_NAMES) -> dict:
         last_layer = max(VGG19.LAYER_INDEX_LOOKUP[layer] for layer in output_layers)
         output_layers = set(output_layers)
         output = {}
@@ -229,7 +229,7 @@ class VGG19(nn.Module):
         import kmeans1d  # Not required for general pastiche usage, just for generating quantized model.
         k = 2 ** 8
         q_state = {}  # quantized state
-        layer_names = [layer_name for layer_name in VGG19.LAYER_NAMES if re.match('^block\d+_conv\d+$', layer_name)]
+        layer_names = [layer_name for layer_name in VGG19.LAYER_NAMES if re.match(r'^block\d+_conv\d+$', layer_name)]
         for layer_name in layer_names:
             layer = getattr(self, layer_name)
             bias = layer.bias
@@ -245,7 +245,7 @@ class VGG19(nn.Module):
     def from_quantized_bin(path):
         q_state = torch.load(path, map_location='cpu')
         weights_dict = {}
-        layer_names = [layer_name for layer_name in VGG19.LAYER_NAMES if re.match('^block\d+_conv\d+$', layer_name)]
+        layer_names = [layer_name for layer_name in VGG19.LAYER_NAMES if re.match(r'^block\d+_conv\d+$', layer_name)]
         for layer_name in layer_names:
             W_q = q_state[layer_name + '_W_q']
             shape = W_q.shape
@@ -259,7 +259,7 @@ class VGG19(nn.Module):
 
     @staticmethod
     def from_keras_h5(path):
-        W_order = (3,2,0,1)
+        W_order = (3, 2, 0, 1)
         with h5py.File(path, 'r') as f:
             weights = VGG19.Weights(
                 block1_conv1_W=f['/block1_conv1/block1_conv1_W_1:0'][()].transpose(W_order),
