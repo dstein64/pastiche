@@ -53,6 +53,7 @@ jobs:
       run: |
         pastiche                                    \
           --num-steps 10                            \
+          --info-step 1                             \
           --content example/boston.jpg              \
           --styles example/vangogh_starry_night.jpg \
           --output test-example.png
@@ -62,6 +63,7 @@ jobs:
       run: |
         pastiche                                    `
           --num-steps 10                            `
+          --info-step 1                             `
           --content example/boston.jpg              `
           --styles example/vangogh_starry_night.jpg `
           --output test-example.png
