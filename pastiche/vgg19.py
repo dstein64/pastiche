@@ -200,6 +200,7 @@ class VGG19(nn.Module):
         output = {}
         x = input
         for idx, layer in enumerate(VGG19.LAYER_NAMES[:last_layer + 1]):
+            assert self.device_strategy[idx] is not None
             # The responsibility is on the caller to put the input on the expected device.
             if idx > 0:
                 x = x.to(self.device_strategy[idx])
@@ -215,8 +216,12 @@ class VGG19(nn.Module):
 
     def set_device_strategy(self, device_strategy):
         for idx, device in enumerate(device_strategy):
-            layer = VGG19.LAYER_NAMES[idx]
-            getattr(self, layer).to(device)
+            layer = getattr(self, VGG19.LAYER_NAMES[idx])
+            if device is None:
+                # Avoid GPU memory usage for unused layer weights
+                layer.to('cpu')
+            else:
+                layer.to(device)
         self.device_strategy = device_strategy
         return self
 

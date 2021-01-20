@@ -182,12 +182,15 @@ class PasticheArtist:
             supplemental_devices = []
         # Configure the device strategy.
         # 'device_strategy' maps layer indices to devices
-        self.device_strategy = [device] * len(VGG19.LAYER_NAMES)
-        end = len(VGG19.LAYER_NAMES)
-        for device, start in sorted(supplemental_devices, key=lambda x: x[1], reverse=True):
+        self.device_strategy = [None] * len(VGG19.LAYER_NAMES)
+        pastiche_layers = set(content_layers).union(style_layers)
+        end = max(VGG19.LAYER_INDEX_LOOKUP[layer] for layer in pastiche_layers) + 1
+        for supp_device, start in sorted(supplemental_devices, key=lambda x: x[1], reverse=True):
             for idx in range(start, end):
-                self.device_strategy[idx] = device
+                self.device_strategy[idx] = supp_device
             end = start
+        for idx in range(0, end):
+            self.device_strategy[idx] = device
         vgg19_q_bin_path = os.path.join(
             os.path.dirname(__file__), 'vgg19_weights_tf_dim_ordering_tf_kernels_notop_q.bin')
         vgg19 = VGG19.from_quantized_bin(vgg19_q_bin_path).set_device_strategy(self.device_strategy)
@@ -232,16 +235,18 @@ class PasticheArtist:
 
     def device_layers_reprs(self):
         """Returns a dictionary mapping devices to a string representation of assigned layers."""
-        map = defaultdict(list)
+        mapping = defaultdict(list)
         idx = 0
         for device, grouper in groupby(self.device_strategy):
+            if device is None:
+                continue
             num_layers = len(list(grouper))
             repr_ = str(idx)
             if num_layers > 1:
                 repr_ = f'{repr_}-{idx + num_layers - 1}'
-            map[device].append(repr_)
+            mapping[device].append(repr_)
             idx += num_layers
-        output = {key: ','.join(value) for key, value in map.items()}
+        output = {key: ','.join(value) for key, value in mapping.items()}
         return output
 
     def _calc_loss(self):
@@ -360,8 +365,8 @@ def _parse_args(argv):
         dest='supplemental_devices',
         help='Supplemental device to use for computations along with a layer index specifying the first layer for'
              ' which the device will be used. The --supplemental-device argument can be repeated. For example,'
-             ' "--device cuda:0 --supplemental-device cuda:1 10 --supplemental-device cpu 30" configures GPU 0 for'
-             f' layers 0 through 9, GPU 1 for layers 10 through 29, and the CPU for layers 30 through {last_layer_idx}.'
+             ' "--device cuda:0 --supplemental-device cuda:1 10 --supplemental-device cpu 20" configures GPU 0 for'
+             f' layers 0 through 9, GPU 1 for layers 10 through 19, and the CPU for layers 20 through {last_layer_idx}.'
              f' Available devices: {", ".join(devices)}. Available layer indices: 1 through {last_layer_idx}.'
     )
     parser.add_argument('--seed', type=int, help='RNG seed.')
@@ -410,6 +415,7 @@ def _parse_args(argv):
     parser.add_argument(
         '--style-weights',
         type=float,
+        metavar='STYLE_WEIGHT',
         nargs='*',
         help='Style image(s) weighting. Defaults to 1/N for each of N style images.'
     )
@@ -446,7 +452,7 @@ def _parse_args(argv):
     # to requiring a '--' separator to resolve such ambiguities.
     parser.add_argument('--content', '-c', required=True, help='File path to the content image.')
     parser.add_argument(
-        '--style', '-s', nargs='+', dest='styles', required=True, help='File path(s) to the style image(s).')
+        '--styles', '-s', metavar='STYLE', nargs='+', required=True, help='File path(s) to the style image(s).')
     parser.add_argument('--output', '-o', required=True, help='File path to save the PNG image.')
 
     args = parser.parse_args(argv[1:])
