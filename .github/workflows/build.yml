@@ -39,7 +39,9 @@ jobs:
 
     - name: Install Torch (windows)
       if: matrix.os == 'windows-latest'
-      run: pip install torch==1.7.1+cpu torchvision==0.8.2+cpu -f https://download.pytorch.org/whl/torch_stable.html
+      run: |
+        pip install torch==1.7.1+cpu torchvision==0.8.2+cpu `
+          -f https://download.pytorch.org/whl/torch_stable.html
 
     - name: Install
       run: |
@@ -49,10 +51,10 @@ jobs:
     - name: Test
       if: matrix.os != 'windows-latest'
       run: |
-        pastiche                                    `
-          --num-steps 10                            `
-          --content example/boston.jpg              `
-          --styles example/vangogh_starry_night.jpg `
+        pastiche                                    \
+          --num-steps 10                            \
+          --content example/boston.jpg              \
+          --styles example/vangogh_starry_night.jpg \
           --output test-example.png
 
     - name: Test (windows)
