@@ -428,10 +428,10 @@ def device_layers_repr(device_strategy):
     idx = 0
     for device, grouper in groupby(device_strategy):
         num_layers = len(list(grouper))
-        bounds = [str(idx)]
+        repr_ = str(idx)
         if num_layers > 1:
-            bounds.append(str(idx + num_layers - 1))
-        map[device].append('-'.join(bounds))
+            repr_ = f'{repr_}-{idx + num_layers - 1}'
+        map[device].append(repr_)
         idx += num_layers
     output = {key: ','.join(value) for key, value in map.items()}
     return output
