@@ -80,6 +80,8 @@ class VGG19(nn.Module):
         'block5_relu4',
         'block5_pool',
     )
+    # LAYER_INDEX_LOOKUP maps layer names to their indices.
+    LAYER_INDEX_LOOKUP = dict(zip(LAYER_NAMES, range(len(LAYER_NAMES))))
 
     Weights = namedtuple('Weights', [
         'block1_conv1_W', 'block1_conv1_b',
@@ -193,8 +195,7 @@ class VGG19(nn.Module):
         self.device_strategy = ['cpu'] * len(VGG19.LAYER_NAMES)
 
     def forward(self, input: torch.Tensor, output_layers: Iterable=LAYER_NAMES) -> dict:
-        idx_lookup = dict(zip(VGG19.LAYER_NAMES, range(len(VGG19.LAYER_NAMES))))
-        last_layer = max(idx_lookup[layer] for layer in output_layers)
+        last_layer = max(VGG19.LAYER_INDEX_LOOKUP[layer] for layer in output_layers)
         output_layers = set(output_layers)
         output = {}
         x = input

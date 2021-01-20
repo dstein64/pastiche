@@ -298,6 +298,7 @@ def _parse_args(argv):
         nargs=2,
         metavar=('DEVICE', 'INDEX'),
         action='append',
+        dest='supplemental_devices',
         help='Supplemental device to use for computations along with a layer index specifying the first layer for'
              ' which the device will be used. The --supplemental-device argument can be repeated. For example,'
              ' "--device cuda:0 --supplemental-device cuda:1 10 --supplemental-device cpu 30" configures GPU 0 for'
@@ -385,35 +386,36 @@ def _parse_args(argv):
     # preceded by an argument with a variable number of inputs (e.g., nargs='*'). This was deemed preferable
     # to requiring a '--' separator to resolve such ambiguities.
     parser.add_argument('--content', '-c', required=True, help='File path to the content image.')
-    parser.add_argument('--style', '-s', nargs='+', required=True, help='File path(s) to the style image(s).')
+    parser.add_argument(
+        '--style', '-s', nargs='+', dest='styles', required=True, help='File path(s) to the style image(s).')
     parser.add_argument('--output', '-o', required=True, help='File path to save the PNG image.')
 
     args = parser.parse_args(argv[1:])
-    if args.supplemental_device is None:
-        args.supplemental_device = []
+    if args.supplemental_devices is None:
+        args.supplemental_devices = []
     if args.style_weights is None:
         args.style_weights = []
-    if len(args.style_weights) < len(args.style):
-        args.style_weights.append(1.0 / len(args.style))
+    if len(args.style_weights) < len(args.styles):
+        args.style_weights.append(1.0 / len(args.styles))
 
     if not args.output.lower().endswith('.png'):
         sys.stderr.write('Output file is missing PNG extension.\n')
         # Intentionally no exit after warning, as processing can proceed even though the output
         # file doesn't have the expected extension. The saved file contents will be a PNG image.
-    for supplemental_device in args.supplemental_device:
+    for supplemental_device in args.supplemental_devices:
         try:
             supplemental_device[1] = int(supplemental_device[1])
         except ValueError:
             sys.stderr.write(f'Invalid --supplemental-device layer index: {supplemental_device[1]}\n')
             sys.exit(1)
-    for device, idx in args.supplemental_device:
+    for device, idx in args.supplemental_devices:
         if device not in devices:
             sys.stderr.write(f'Invalid --supplemental-device device: {device}\n')
             sys.exit(1)
         if idx <= 0 or idx > last_layer_idx:
             sys.stderr.write(f'Invalid --supplemental-device layer index: {idx}\n')
             sys.exit(1)
-    supp_device_layer_indices = sorted([idx for _, idx in args.supplemental_device])
+    supp_device_layer_indices = sorted([idx for _, idx in args.supplemental_devices])
     for idx1, idx2 in zip(supp_device_layer_indices, supp_device_layer_indices[1:]):
         if idx1 == idx2:
             sys.stderr.write(f'Repeated --supplemental-device layer index: {idx1}\n')
@@ -453,7 +455,7 @@ def main(argv=sys.argv):
     # 'device_strategy' maps layer indices to devices
     device_strategy = [args.device] * len(VGG19.LAYER_NAMES)
     end = len(VGG19.LAYER_NAMES)
-    for device, start in sorted(args.supplemental_device, key=lambda x: x[1], reverse=True):
+    for device, start in sorted(args.supplemental_devices, key=lambda x: x[1], reverse=True):
         for idx in range(start, end):
             device_strategy[idx] = device
         end = start
@@ -469,7 +471,7 @@ def main(argv=sys.argv):
         style_pixels = content_size[0] * content_size[1]
     style_targetss = []
     style_sizes = []
-    for path in args.style:
+    for path in args.styles:
         style = load_image(path, pixels=style_pixels, size=args.style_size)
         style_sizes.append(list(style.shape[2:]))
         if args.preserve_color:
@@ -502,7 +504,7 @@ def main(argv=sys.argv):
             print(f'device[{idx}]: {device} ({layers})')
         print(f'seed: {seed}')
         print(f'size: {"x".join(str(x) for x in reversed(content_size))}')
-        for idx in range(len(args.style)):
+        for idx in range(len(args.styles)):
             print(f'style_size[{idx}]: {"x".join(str(x) for x in reversed(style_sizes[idx]))}')
         print()
         print('step elapsed loss')
