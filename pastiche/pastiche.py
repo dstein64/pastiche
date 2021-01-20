@@ -91,8 +91,14 @@ def load_image(image_path, pixels=None, size=None):
         w_ = w
     x = resize(x, (h_, w_))
     x = to_tensor(x) * 255.0
-    if x.shape[0] == 1:
+    if x.shape[0] == 2:
+        raise RuntimeError('Unsupported image format.')
+    elif x.shape[0] == 1:
+        # Convert monochrome image to RGB
         x = x.repeat(3, 1, 1)
+    elif x.shape[0] > 3:
+        # Drop alpha channel
+        x = x[:3]
     # Normalize for VGG
     x[[0, 1, 2]] = x[[2, 1, 0]]  # RGB -> BGR
     for idx, shift in enumerate(VGG_MEAN):
@@ -529,7 +535,7 @@ def main(argv=sys.argv):
         print(f'seed: {seed}')
         print(f'size: {"x".join(str(x) for x in reversed(artist.content_size))}')
         for idx in range(len(args.styles)):
-            print(f'style_size[{idx}]: {"x".join(str(x) for x in reversed(artist.style_sizes[idx]))}')
+            print(f'style_sizes[{idx}]: {"x".join(str(x) for x in reversed(artist.style_sizes[idx]))}')
         print()
         print('step elapsed loss')
         print('---- ------- ----')
