@@ -80,6 +80,8 @@ class VGG19(nn.Module):
         'block5_relu4',
         'block5_pool',
     )
+    # LAYER_INDEX_LOOKUP maps layer names to their indices.
+    LAYER_INDEX_LOOKUP = dict(zip(LAYER_NAMES, range(len(LAYER_NAMES))))
 
     Weights = namedtuple('Weights', [
         'block1_conv1_W', 'block1_conv1_b',
@@ -110,28 +112,46 @@ class VGG19(nn.Module):
         # Layer specifications
 
         self.block1_conv1 = nn.Conv2d(3, 64, kernel_size=3, padding=1)
+        self.block1_relu1 = nn.ReLU()
         self.block1_conv2 = nn.Conv2d(64, 64, kernel_size=3, padding=1)
+        self.block1_relu2 = nn.ReLU()
+        self.block1_pool = nn.MaxPool2d(kernel_size=2, stride=2)
 
         self.block2_conv1 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        self.block2_relu1 = nn.ReLU()
         self.block2_conv2 = nn.Conv2d(128, 128, kernel_size=3, padding=1)
+        self.block2_relu2 = nn.ReLU()
+        self.block2_pool = nn.MaxPool2d(kernel_size=2, stride=2)
 
         self.block3_conv1 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
+        self.block3_relu1 = nn.ReLU()
         self.block3_conv2 = nn.Conv2d(256, 256, kernel_size=3, padding=1)
+        self.block3_relu2 = nn.ReLU()
         self.block3_conv3 = nn.Conv2d(256, 256, kernel_size=3, padding=1)
+        self.block3_relu3 = nn.ReLU()
         self.block3_conv4 = nn.Conv2d(256, 256, kernel_size=3, padding=1)
+        self.block3_relu4 = nn.ReLU()
+        self.block3_pool = nn.MaxPool2d(kernel_size=2, stride=2)
 
         self.block4_conv1 = nn.Conv2d(256, 512, kernel_size=3, padding=1)
+        self.block4_relu1 = nn.ReLU()
         self.block4_conv2 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
+        self.block4_relu2 = nn.ReLU()
         self.block4_conv3 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
+        self.block4_relu3 = nn.ReLU()
         self.block4_conv4 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
+        self.block4_relu4 = nn.ReLU()
+        self.block4_pool = nn.MaxPool2d(kernel_size=2, stride=2)
 
         self.block5_conv1 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
+        self.block5_relu1 = nn.ReLU()
         self.block5_conv2 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
+        self.block5_relu2 = nn.ReLU()
         self.block5_conv3 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
+        self.block5_relu3 = nn.ReLU()
         self.block5_conv4 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
-
-        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.relu = nn.ReLU()
+        self.block5_relu4 = nn.ReLU()
+        self.block5_pool = nn.MaxPool2d(kernel_size=2, stride=2)
 
         # Weight instantiation
 
@@ -172,66 +192,44 @@ class VGG19(nn.Module):
         self.block5_conv4.weight.data = torch.from_numpy(weights.block5_conv4_W)
         self.block5_conv4.bias.data = torch.from_numpy(weights.block5_conv4_b)
 
-    def forward(self, input: torch.Tensor, output_layers: Iterable=LAYER_NAMES) -> dict:
+        self.device_strategy = ['cpu'] * len(VGG19.LAYER_NAMES)
+
+    def forward(self, input: torch.Tensor, output_layers: Iterable = LAYER_NAMES) -> dict:
+        last_layer = max(VGG19.LAYER_INDEX_LOOKUP[layer] for layer in output_layers)
+        output_layers = set(output_layers)
         output = {}
-
         x = input
-
-        x = output['block1_conv1'] = self.block1_conv1.forward(x)
-        x = output['block1_relu1'] = self.relu.forward(x)
-        x = output['block1_conv2'] = self.block1_conv2.forward(x)
-        x = output['block1_relu2'] = self.relu.forward(x)
-        x = output['block1_pool'] = self.pool.forward(x)
-
-        x = output['block2_conv1'] = self.block2_conv1.forward(x)
-        x = output['block2_relu1'] = self.relu.forward(x)
-        x = output['block2_conv2'] = self.block2_conv2.forward(x)
-        x = output['block2_relu2'] = self.relu.forward(x)
-        x = output['block2_pool'] = self.pool.forward(x)
-
-        x = output['block3_conv1'] = self.block3_conv1.forward(x)
-        x = output['block3_relu1'] = self.relu.forward(x)
-        x = output['block3_conv2'] = self.block3_conv2.forward(x)
-        x = output['block3_relu2'] = self.relu.forward(x)
-        x = output['block3_conv3'] = self.block3_conv3.forward(x)
-        x = output['block3_relu3'] = self.relu.forward(x)
-        x = output['block3_conv4'] = self.block3_conv4.forward(x)
-        x = output['block3_relu4'] = self.relu.forward(x)
-        x = output['block3_pool'] = self.pool.forward(x)
-
-        x = output['block4_conv1'] = self.block4_conv1.forward(x)
-        x = output['block4_relu1'] = self.relu.forward(x)
-        x = output['block4_conv2'] = self.block4_conv2.forward(x)
-        x = output['block4_relu2'] = self.relu.forward(x)
-        x = output['block4_conv3'] = self.block4_conv3.forward(x)
-        x = output['block4_relu3'] = self.relu.forward(x)
-        x = output['block4_conv4'] = self.block4_conv4.forward(x)
-        x = output['block4_relu4'] = self.relu.forward(x)
-        x = output['block4_pool'] = self.pool.forward(x)
-
-        x = output['block5_conv1'] = self.block5_conv1.forward(x)
-        x = output['block5_relu1'] = self.relu.forward(x)
-        x = output['block5_conv2'] = self.block5_conv2.forward(x)
-        x = output['block5_relu2'] = self.relu.forward(x)
-        x = output['block5_conv3'] = self.block5_conv3.forward(x)
-        x = output['block5_relu3'] = self.relu.forward(x)
-        x = output['block5_conv4'] = self.block5_conv4.forward(x)
-        x = output['block5_relu4'] = self.relu.forward(x)
-        x = output['block5_pool'] = self.pool.forward(x)
-
-        output = {key: value for key, value in output.items() if key in output_layers}
-
-        if not input.requires_grad:
-            for key in output.keys():
-                output[key] = output[key].detach()
-
+        for idx, layer in enumerate(VGG19.LAYER_NAMES[:last_layer + 1]):
+            assert self.device_strategy[idx] is not None
+            # The responsibility is on the caller to put the input on the expected device.
+            if idx > 0:
+                x = x.to(self.device_strategy[idx])
+            x = getattr(self, layer).forward(x)
+            if not input.requires_grad:
+                x = x.detach()
+            if layer in output_layers:
+                output[layer] = x
         return output
+
+    def to(self, *args, **kwargs):
+        raise RuntimeError('Unsupported. Use set_device_strategy().')
+
+    def set_device_strategy(self, device_strategy):
+        for idx, device in enumerate(device_strategy):
+            layer = getattr(self, VGG19.LAYER_NAMES[idx])
+            if device is None:
+                # Avoid GPU memory usage for unused layer weights
+                layer.to('cpu')
+            else:
+                layer.to(device)
+        self.device_strategy = device_strategy
+        return self
 
     def save_quantized_bin(self, path):
         import kmeans1d  # Not required for general pastiche usage, just for generating quantized model.
         k = 2 ** 8
         q_state = {}  # quantized state
-        layer_names = [layer_name for layer_name in VGG19.LAYER_NAMES if re.match('^block\d+_conv\d+$', layer_name)]
+        layer_names = [layer_name for layer_name in VGG19.LAYER_NAMES if re.match(r'^block\d+_conv\d+$', layer_name)]
         for layer_name in layer_names:
             layer = getattr(self, layer_name)
             bias = layer.bias
@@ -247,7 +245,7 @@ class VGG19(nn.Module):
     def from_quantized_bin(path):
         q_state = torch.load(path, map_location='cpu')
         weights_dict = {}
-        layer_names = [layer_name for layer_name in VGG19.LAYER_NAMES if re.match('^block\d+_conv\d+$', layer_name)]
+        layer_names = [layer_name for layer_name in VGG19.LAYER_NAMES if re.match(r'^block\d+_conv\d+$', layer_name)]
         for layer_name in layer_names:
             W_q = q_state[layer_name + '_W_q']
             shape = W_q.shape
@@ -261,7 +259,7 @@ class VGG19(nn.Module):
 
     @staticmethod
     def from_keras_h5(path):
-        W_order = (3,2,0,1)
+        W_order = (3, 2, 0, 1)
         with h5py.File(path, 'r') as f:
             weights = VGG19.Weights(
                 block1_conv1_W=f['/block1_conv1/block1_conv1_W_1:0'][()].transpose(W_order),

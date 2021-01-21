@@ -14,8 +14,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        python-version: [3.6, 3.7, 3.8, 3.9]
         os: [macos-latest, windows-latest, ubuntu-latest]
-        python-version: [3.6, 3.7, 3.8]
+        exclude:
+          # Expected failure on Ubuntu using Python 3.9 (PyTorch Issue #50858)
+          - os: ubuntu-latest
+            python-version: 3.9
 
     steps:
     - name: Checkout
@@ -38,8 +42,10 @@ jobs:
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
     - name: Install Torch (windows)
-      if: matrix.os == 'windows-latest'
-      run: pip install torch==1.5.0+cpu torchvision==0.6.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+      if: startsWith(matrix.os, 'windows-')
+      run: |
+        pip install torch==1.7.1+cpu torchvision==0.8.2+cpu `
+          -f https://download.pytorch.org/whl/torch_stable.html
 
     - name: Install
       run: |
@@ -47,4 +53,21 @@ jobs:
         pip install .
 
     - name: Test
-      run: pastiche --num-steps 10 example/boston.jpg example/vangogh_starry_night.jpg test-example.png
+      if: "!startsWith(matrix.os, 'windows-')"
+      run: |
+        pastiche                                    \
+          --num-steps 10                            \
+          --info-step 1                             \
+          --content example/boston.jpg              \
+          --styles example/vangogh_starry_night.jpg \
+          --output test-example.png
+
+    - name: Test (windows)
+      if: startsWith(matrix.os, 'windows-')
+      run: |
+        pastiche                                    `
+          --num-steps 10                            `
+          --info-step 1                             `
+          --content example/boston.jpg              `
+          --styles example/vangogh_starry_night.jpg `
+          --output test-example.png
