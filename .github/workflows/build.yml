@@ -38,7 +38,7 @@ jobs:
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
     - name: Install Torch (windows)
-      if: matrix.os == 'windows-latest'
+      if: startsWith(matrix.os, 'windows')
       run: |
         pip install torch==1.7.1+cpu torchvision==0.8.2+cpu `
           -f https://download.pytorch.org/whl/torch_stable.html
@@ -49,7 +49,10 @@ jobs:
         pip install .
 
     - name: Test
-      if: matrix.os != 'windows-latest'
+      # Expected failure on Ubuntu using Python 3.9 (PyTorch Issue #50858)
+      if: |
+        startsWith(matrix.os, 'macos') ||
+        (startsWith(matrix.os, 'ubuntu') && ${{ matrix.python-version }} != '3.9')
       run: |
         pastiche                                    \
           --num-steps 10                            \
@@ -59,7 +62,7 @@ jobs:
           --output test-example.png
 
     - name: Test (windows)
-      if: matrix.os == 'windows-latest'
+      if: startsWith(matrix.os, 'windows')
       run: |
         pastiche                                    `
           --num-steps 10                            `
