@@ -17,7 +17,7 @@ Features
 
 - Support for saving intermediate images during optimization
 - An option for preserving colors from the content image
-- Cross-device optimization (`--supplemental-device`)
+- Multiple-device computation (`--supplemental-device`)
 - Style transfers utilizing multiple style images
 
 Installation
