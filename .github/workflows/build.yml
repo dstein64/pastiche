@@ -53,7 +53,6 @@ jobs:
         pip install .
 
     - name: Test
-      if: !(startsWith(matrix.os, 'windows-'))
       run: |
         pastiche                                    \
           --num-steps 10                            \
