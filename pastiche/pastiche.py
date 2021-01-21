@@ -269,7 +269,7 @@ class PasticheArtist:
             pastiche_act = pastiche_targets[layer]
             content_act = self.content_targets[layer]
             if self.content_layer_weights is None or len(self.content_layer_weights) == 0:
-                layer_weight = 1.0
+                layer_weight = .001
             elif len(self.content_layer_weights) > idx:
                 layer_weight = self.content_layer_weights[idx]
             else:
@@ -288,7 +288,7 @@ class PasticheArtist:
                 pastiche_g = gram(pastiche_act)
                 style_g = gram(style_act)
                 if self.style_layer_weights is None or len(self.style_layer_weights) == 0:
-                    layer_weight = 1e3 / (pastiche_act.shape[1] ** 2)
+                    layer_weight = 1.0 / (pastiche_act.shape[1] ** 2)
                 elif len(self.style_layer_weights) > layer_idx:
                     layer_weight = self.style_layer_weights[layer_idx]
                 else:
