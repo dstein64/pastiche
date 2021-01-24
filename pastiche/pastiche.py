@@ -201,6 +201,9 @@ class PasticheArtist:
         vgg19_q_bin_path = os.path.join(
             os.path.dirname(__file__), 'vgg19_weights_tf_dim_ordering_tf_kernels_notop_q.bin')
         vgg19 = VGG19.from_quantized_bin(vgg19_q_bin_path).set_device_strategy(self.device_strategy)
+        # Disable gradient calculations for model weights to reduce memory requirement and reduce runtime.
+        for param in vgg19.parameters():
+            param.requires_grad = False
         content = load_image(content, pixels=size_pixels, size=size)
         self.content_size = list(content.shape[2:])
         content_targets = vgg19.forward(content.to(device), content_layers)
