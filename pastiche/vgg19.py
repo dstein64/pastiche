@@ -35,6 +35,8 @@ import torch.nn as nn
 # VGG19.from_quantized_bin loads a quantized model.
 #   > vgg19_q = VGG19.from_quantized_bin(quantized_bin_path)
 
+DEFAULT_POOLING='max'
+
 
 class VGG19(nn.Module):
     LAYER_NAMES = (
@@ -106,8 +108,15 @@ class VGG19(nn.Module):
         'block5_conv4_W', 'block5_conv4_b',
     ])
 
-    def __init__(self, weights):
+    def __init__(self, weights, pooling=DEFAULT_POOLING):
         super(VGG19, self).__init__()
+
+        if pooling == 'max':
+            pool = nn.MaxPool2d
+        elif pooling == 'avg':
+            pool = nn.AvgPool2d
+        else:
+            raise RuntimeError(f'Unknown pooling: {pooling}')
 
         # Layer specifications
 
@@ -115,13 +124,13 @@ class VGG19(nn.Module):
         self.block1_relu1 = nn.ReLU()
         self.block1_conv2 = nn.Conv2d(64, 64, kernel_size=3, padding=1)
         self.block1_relu2 = nn.ReLU()
-        self.block1_pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.block1_pool = pool(kernel_size=2, stride=2)
 
         self.block2_conv1 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
         self.block2_relu1 = nn.ReLU()
         self.block2_conv2 = nn.Conv2d(128, 128, kernel_size=3, padding=1)
         self.block2_relu2 = nn.ReLU()
-        self.block2_pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.block2_pool = pool(kernel_size=2, stride=2)
 
         self.block3_conv1 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
         self.block3_relu1 = nn.ReLU()
@@ -131,7 +140,7 @@ class VGG19(nn.Module):
         self.block3_relu3 = nn.ReLU()
         self.block3_conv4 = nn.Conv2d(256, 256, kernel_size=3, padding=1)
         self.block3_relu4 = nn.ReLU()
-        self.block3_pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.block3_pool = pool(kernel_size=2, stride=2)
 
         self.block4_conv1 = nn.Conv2d(256, 512, kernel_size=3, padding=1)
         self.block4_relu1 = nn.ReLU()
@@ -141,7 +150,7 @@ class VGG19(nn.Module):
         self.block4_relu3 = nn.ReLU()
         self.block4_conv4 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
         self.block4_relu4 = nn.ReLU()
-        self.block4_pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.block4_pool = pool(kernel_size=2, stride=2)
 
         self.block5_conv1 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
         self.block5_relu1 = nn.ReLU()
@@ -151,7 +160,7 @@ class VGG19(nn.Module):
         self.block5_relu3 = nn.ReLU()
         self.block5_conv4 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
         self.block5_relu4 = nn.ReLU()
-        self.block5_pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.block5_pool = pool(kernel_size=2, stride=2)
 
         # Weight instantiation
 
@@ -242,7 +251,7 @@ class VGG19(nn.Module):
         torch.save(q_state, path)
 
     @staticmethod
-    def from_quantized_bin(path):
+    def from_quantized_bin(path, pooling=DEFAULT_POOLING):
         q_state = torch.load(path, map_location='cpu')
         weights_dict = {}
         layer_names = [layer_name for layer_name in VGG19.LAYER_NAMES if re.match(r'^block\d+_conv\d+$', layer_name)]
@@ -255,10 +264,10 @@ class VGG19(nn.Module):
             weights_dict[layer_name + '_W'] = W.numpy()
             weights_dict[layer_name + '_b'] = b.numpy()
         weights = VGG19.Weights(**weights_dict)
-        return VGG19(weights)
+        return VGG19(weights, pooling=pooling)
 
     @staticmethod
-    def from_keras_h5(path):
+    def from_keras_h5(path, pooling=DEFAULT_POOLING):
         W_order = (3, 2, 0, 1)
         with h5py.File(path, 'r') as f:
             weights = VGG19.Weights(
@@ -299,4 +308,4 @@ class VGG19(nn.Module):
                 block5_conv4_W=f['/block5_conv4/block5_conv4_W_1:0'][()].transpose(W_order),
                 block5_conv4_b=f['/block5_conv4/block5_conv4_b_1:0'][()],
             )
-        return VGG19(weights)
+        return VGG19(weights, pooling=pooling)

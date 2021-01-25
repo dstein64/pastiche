@@ -49,7 +49,6 @@ EXIT_SUCCESS = 0
 
 DEFAULT_CONTENT_LAYERS = ['block4_relu2']
 DEFAULT_STYLE_LAYERS = ['block1_relu1', 'block2_relu1', 'block3_relu1', 'block4_relu1', 'block5_relu1']
-DEFAULT_TV_WEIGHT = 0.0
 # VGG details are at:
 #   http://www.robots.ox.ac.uk/~vgg/research/very_deep/
 # which links to:
@@ -169,6 +168,9 @@ class PasticheArtist:
             self,
             content: str,
             styles: str,
+            *,
+            pooling: str = 'max',
+            optimizer: str = 'lbfgs',
             random_init: bool = False,
             init: Optional[str] = None,
             device: str = 'cuda' if 'cuda' in get_devices() else 'cpu',
@@ -180,7 +182,7 @@ class PasticheArtist:
             style_layer_weights: Optional[Sequence] = None,
             content_weight: float = 1.0,
             style_weights: Optional[Sequence] = None,
-            tv_weight: float = DEFAULT_TV_WEIGHT,
+            tv_weight: float = 0.0,
             size_pixels: Optional[int] = None,
             size=None,
             style_size_pixels: Optional[int] = None,
@@ -200,7 +202,8 @@ class PasticheArtist:
             self.device_strategy[idx] = device
         vgg19_q_bin_path = os.path.join(
             os.path.dirname(__file__), 'vgg19_weights_tf_dim_ordering_tf_kernels_notop_q.bin')
-        vgg19 = VGG19.from_quantized_bin(vgg19_q_bin_path).set_device_strategy(self.device_strategy)
+        vgg19 = VGG19.from_quantized_bin(vgg19_q_bin_path, pooling=pooling)
+        vgg19.set_device_strategy(self.device_strategy)
         # Disable gradient calculations for model weights to reduce memory requirement and reduce runtime.
         for param in vgg19.parameters():
             param.requires_grad = False
@@ -229,7 +232,12 @@ class PasticheArtist:
         del content
 
         self.vgg19 = vgg19
-        self.optimizer = optim.LBFGS([self.pastiche], max_iter=1)
+        if optimizer == 'lbfgs':
+            self.optimizer = optim.LBFGS([self.pastiche], max_iter=1, lr=1.0)
+        elif optimizer == 'adam':
+            self.optimizer = optim.Adam([self.pastiche], lr=1.0)
+        else:
+            raise RuntimeError(f'Unknown optimizer: {optimizer}')
         self.content_layers = content_layers
         self.style_layers = style_layers
         self.content_targets = content_targets
@@ -272,7 +280,7 @@ class PasticheArtist:
             pastiche_act = pastiche_targets[layer]
             content_act = self.content_targets[layer]
             if self.content_layer_weights is None or len(self.content_layer_weights) == 0:
-                layer_weight = .001
+                layer_weight = .01
             elif len(self.content_layer_weights) > idx:
                 layer_weight = self.content_layer_weights[idx]
             else:
@@ -291,7 +299,7 @@ class PasticheArtist:
                 pastiche_g = gram(pastiche_act)
                 style_g = gram(style_act)
                 if self.style_layer_weights is None or len(self.style_layer_weights) == 0:
-                    layer_weight = 1.0 / (pastiche_act.shape[1] ** 2)
+                    layer_weight = 10.0 / (pastiche_act.shape[1] ** 2)
                 elif len(self.style_layer_weights) > layer_idx:
                     layer_weight = self.style_layer_weights[layer_idx]
                 else:
@@ -385,7 +393,12 @@ def _parse_args(argv):
         '--deterministic', action='store_true', help='Avoid non-determinism where possible (at cost of speed).')
     parser.add_argument(
         '--list-layers', action=_ListLayersAction, help='Show a list of available layer names and exit.')
+
+    # VGG model options
+    parser.add_argument('--pooling', choices=('max', 'avg'), default='max')
+
     # Optimization options
+    parser.add_argument('--optimizer', choices=('adam', 'lbfgs'), default='lbfgs')
     parser.add_argument('--num-steps', type=int, default=1000)
     parser.add_argument(
         '--content-layers',
@@ -430,12 +443,14 @@ def _parse_args(argv):
         nargs='*',
         help='Style image(s) weighting. Defaults to 1/N for each of N style images.'
     )
-    parser.add_argument('--tv-weight', default=DEFAULT_TV_WEIGHT, type=float, help='Total-variation weight')
+    parser.add_argument('--tv-weight', default=0.0, type=float, help='Total-variation weight')
+
     # Output options
     parser.add_argument('--no-verbose', action='store_false', dest='verbose')
     parser.add_argument('--info-step', type=int, default=100, help='Step size for displaying information.')
     parser.add_argument('--workspace', help='Directory for saving intermediate results.')
     parser.add_argument('--workspace-step', type=int, default=10, help='Step size for saving to workspace.')
+
     # Input options
     parser.add_argument('--random-init', action='store_true', help='Initialize randomly (overrides --init)')
     parser.add_argument('--init', help='Optional file path to the initialization image.')
@@ -514,6 +529,8 @@ def main(argv=sys.argv):
 
     artist = PasticheArtist(
         args.content, args.styles,
+        pooling=args.pooling,
+        optimizer=args.optimizer,
         device=args.device,
         supplemental_devices=args.supplemental_devices,
         random_init=args.random_init,
