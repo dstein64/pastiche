@@ -86,26 +86,11 @@ class VGG19(nn.Module):
     LAYER_INDEX_LOOKUP = dict(zip(LAYER_NAMES, range(len(LAYER_NAMES))))
 
     Weights = namedtuple('Weights', [
-        'block1_conv1_W', 'block1_conv1_b',
-        'block1_conv2_W', 'block1_conv2_b',
-
-        'block2_conv1_W', 'block2_conv1_b',
-        'block2_conv2_W', 'block2_conv2_b',
-
-        'block3_conv1_W', 'block3_conv1_b',
-        'block3_conv2_W', 'block3_conv2_b',
-        'block3_conv3_W', 'block3_conv3_b',
-        'block3_conv4_W', 'block3_conv4_b',
-
-        'block4_conv1_W', 'block4_conv1_b',
-        'block4_conv2_W', 'block4_conv2_b',
-        'block4_conv3_W', 'block4_conv3_b',
-        'block4_conv4_W', 'block4_conv4_b',
-
-        'block5_conv1_W', 'block5_conv1_b',
-        'block5_conv2_W', 'block5_conv2_b',
-        'block5_conv3_W', 'block5_conv3_b',
-        'block5_conv4_W', 'block5_conv4_b',
+        'block1_conv1', 'block1_conv2',
+        'block2_conv1', 'block2_conv2',
+        'block3_conv1', 'block3_conv2', 'block3_conv3', 'block3_conv4',
+        'block4_conv1', 'block4_conv2', 'block4_conv3', 'block4_conv4',
+        'block5_conv1', 'block5_conv2', 'block5_conv3', 'block5_conv4',
     ])
 
     def __init__(self, weights, pooling=DEFAULT_POOLING):
@@ -164,42 +149,11 @@ class VGG19(nn.Module):
 
         # Weight instantiation
 
-        self.block1_conv1.weight.data = torch.from_numpy(weights.block1_conv1_W)
-        self.block1_conv1.bias.data = torch.from_numpy(weights.block1_conv1_b)
-        self.block1_conv2.weight.data = torch.from_numpy(weights.block1_conv2_W)
-        self.block1_conv2.bias.data = torch.from_numpy(weights.block1_conv2_b)
-
-        self.block2_conv1.weight.data = torch.from_numpy(weights.block2_conv1_W)
-        self.block2_conv1.bias.data = torch.from_numpy(weights.block2_conv1_b)
-        self.block2_conv2.weight.data = torch.from_numpy(weights.block2_conv2_W)
-        self.block2_conv2.bias.data = torch.from_numpy(weights.block2_conv2_b)
-
-        self.block3_conv1.weight.data = torch.from_numpy(weights.block3_conv1_W)
-        self.block3_conv1.bias.data = torch.from_numpy(weights.block3_conv1_b)
-        self.block3_conv2.weight.data = torch.from_numpy(weights.block3_conv2_W)
-        self.block3_conv2.bias.data = torch.from_numpy(weights.block3_conv2_b)
-        self.block3_conv3.weight.data = torch.from_numpy(weights.block3_conv3_W)
-        self.block3_conv3.bias.data = torch.from_numpy(weights.block3_conv3_b)
-        self.block3_conv4.weight.data = torch.from_numpy(weights.block3_conv4_W)
-        self.block3_conv4.bias.data = torch.from_numpy(weights.block3_conv4_b)
-
-        self.block4_conv1.weight.data = torch.from_numpy(weights.block4_conv1_W)
-        self.block4_conv1.bias.data = torch.from_numpy(weights.block4_conv1_b)
-        self.block4_conv2.weight.data = torch.from_numpy(weights.block4_conv2_W)
-        self.block4_conv2.bias.data = torch.from_numpy(weights.block4_conv2_b)
-        self.block4_conv3.weight.data = torch.from_numpy(weights.block4_conv3_W)
-        self.block4_conv3.bias.data = torch.from_numpy(weights.block4_conv3_b)
-        self.block4_conv4.weight.data = torch.from_numpy(weights.block4_conv4_W)
-        self.block4_conv4.bias.data = torch.from_numpy(weights.block4_conv4_b)
-
-        self.block5_conv1.weight.data = torch.from_numpy(weights.block5_conv1_W)
-        self.block5_conv1.bias.data = torch.from_numpy(weights.block5_conv1_b)
-        self.block5_conv2.weight.data = torch.from_numpy(weights.block5_conv2_W)
-        self.block5_conv2.bias.data = torch.from_numpy(weights.block5_conv2_b)
-        self.block5_conv3.weight.data = torch.from_numpy(weights.block5_conv3_W)
-        self.block5_conv3.bias.data = torch.from_numpy(weights.block5_conv3_b)
-        self.block5_conv4.weight.data = torch.from_numpy(weights.block5_conv4_W)
-        self.block5_conv4.bias.data = torch.from_numpy(weights.block5_conv4_b)
+        for field in weights._fields:
+            layer = getattr(self, field)
+            weight, bias = getattr(weights, field)
+            layer.weight.data = torch.from_numpy(weight)
+            layer.bias.data = torch.from_numpy(bias)
 
         self.device_strategy = ['cpu'] * len(VGG19.LAYER_NAMES)
 
@@ -261,51 +215,19 @@ class VGG19(nn.Module):
             W_table = q_state[layer_name + '_W_table']
             W = W_table[W_q.flatten().tolist()].reshape(shape)
             b = q_state[layer_name + '_b']
-            weights_dict[layer_name + '_W'] = W.numpy()
-            weights_dict[layer_name + '_b'] = b.numpy()
+            weights_dict[layer_name] = W.numpy(), b.numpy()
         weights = VGG19.Weights(**weights_dict)
         return VGG19(weights, pooling=pooling)
 
     @staticmethod
     def from_keras_h5(path, pooling=DEFAULT_POOLING):
-        W_order = (3, 2, 0, 1)
         with h5py.File(path, 'r') as f:
-            weights = VGG19.Weights(
-                block1_conv1_W=f['/block1_conv1/block1_conv1_W_1:0'][()].transpose(W_order),
-                block1_conv1_b=f['/block1_conv1/block1_conv1_b_1:0'][()],
-                block1_conv2_W=f['/block1_conv2/block1_conv2_W_1:0'][()].transpose(W_order),
-                block1_conv2_b=f['/block1_conv2/block1_conv2_b_1:0'][()],
-
-                block2_conv1_W=f['/block2_conv1/block2_conv1_W_1:0'][()].transpose(W_order),
-                block2_conv1_b=f['/block2_conv1/block2_conv1_b_1:0'][()],
-                block2_conv2_W=f['/block2_conv2/block2_conv2_W_1:0'][()].transpose(W_order),
-                block2_conv2_b=f['/block2_conv2/block2_conv2_b_1:0'][()],
-
-                block3_conv1_W=f['/block3_conv1/block3_conv1_W_1:0'][()].transpose(W_order),
-                block3_conv1_b=f['/block3_conv1/block3_conv1_b_1:0'][()],
-                block3_conv2_W=f['/block3_conv2/block3_conv2_W_1:0'][()].transpose(W_order),
-                block3_conv2_b=f['/block3_conv2/block3_conv2_b_1:0'][()],
-                block3_conv3_W=f['/block3_conv3/block3_conv3_W_1:0'][()].transpose(W_order),
-                block3_conv3_b=f['/block3_conv3/block3_conv3_b_1:0'][()],
-                block3_conv4_W=f['/block3_conv4/block3_conv4_W_1:0'][()].transpose(W_order),
-                block3_conv4_b=f['/block3_conv4/block3_conv4_b_1:0'][()],
-
-                block4_conv1_W=f['/block4_conv1/block4_conv1_W_1:0'][()].transpose(W_order),
-                block4_conv1_b=f['/block4_conv1/block4_conv1_b_1:0'][()],
-                block4_conv2_W=f['/block4_conv2/block4_conv2_W_1:0'][()].transpose(W_order),
-                block4_conv2_b=f['/block4_conv2/block4_conv2_b_1:0'][()],
-                block4_conv3_W=f['/block4_conv3/block4_conv3_W_1:0'][()].transpose(W_order),
-                block4_conv3_b=f['/block4_conv3/block4_conv3_b_1:0'][()],
-                block4_conv4_W=f['/block4_conv4/block4_conv4_W_1:0'][()].transpose(W_order),
-                block4_conv4_b=f['/block4_conv4/block4_conv4_b_1:0'][()],
-
-                block5_conv1_W=f['/block5_conv1/block5_conv1_W_1:0'][()].transpose(W_order),
-                block5_conv1_b=f['/block5_conv1/block5_conv1_b_1:0'][()],
-                block5_conv2_W=f['/block5_conv2/block5_conv2_W_1:0'][()].transpose(W_order),
-                block5_conv2_b=f['/block5_conv2/block5_conv2_b_1:0'][()],
-                block5_conv3_W=f['/block5_conv3/block5_conv3_W_1:0'][()].transpose(W_order),
-                block5_conv3_b=f['/block5_conv3/block5_conv3_b_1:0'][()],
-                block5_conv4_W=f['/block5_conv4/block5_conv4_W_1:0'][()].transpose(W_order),
-                block5_conv4_b=f['/block5_conv4/block5_conv4_b_1:0'][()],
-            )
-        return VGG19(weights, pooling=pooling)
+            weights_dict = {}
+            for layer_name in VGG19.LAYER_NAMES:
+                # Only the convolutional layers have weights.
+                if not layer_name.split('_')[1].startswith('conv'):
+                    continue
+                W = f[f'/{layer_name}/{layer_name}_W_1:0'][()].transpose((3, 2, 0, 1))
+                b = f[f'/{layer_name}/{layer_name}_b_1:0'][()]
+                weights_dict[layer_name] = (W, b)
+        return VGG19(VGG19.Weights(**weights_dict), pooling=pooling)
