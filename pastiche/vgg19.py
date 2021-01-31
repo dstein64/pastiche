@@ -31,12 +31,6 @@ import torch.nn as nn
 #   https://github.com/keras-team/keras-applications/blob/master/
 #           keras_applications/vgg19.py
 
-# To generate a quantized model, load the original model, then call VGG19.save_quantized_bin.
-#   > vgg19 = VGG19.from_keras_h5(keras_h5_path)
-#   > vgg19.save_quantized_bin(quantized_bin_path)
-# VGG19.from_quantized_bin loads a quantized model.
-#   > vgg19_q = VGG19.from_quantized_bin(quantized_bin_path)
-
 DEFAULT_POOLING='max'
 
 
@@ -205,7 +199,7 @@ class VGG19(nn.Module):
 
 def main(argv=sys.argv):
     parser = argparse.ArgumentParser(
-        prog='pastiche',
+        prog='vgg19',
         description='Convert a VGG19 model from Keras format to a format with quantized weights.',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
