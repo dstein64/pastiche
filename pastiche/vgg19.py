@@ -1,6 +1,8 @@
+import argparse
 from collections import namedtuple
 from typing import Iterable
 import re
+import sys
 
 import h5py
 import torch
@@ -199,3 +201,20 @@ class VGG19(nn.Module):
                 b = f[f'/{layer_name}/{layer_name}_b_1:0'][()]
                 weights_dict[layer_name] = (W, b)
         return VGG19(VGG19.Weights(**weights_dict), pooling=pooling)
+
+
+def main(argv=sys.argv):
+    parser = argparse.ArgumentParser(
+        prog='pastiche',
+        description='Convert a VGG19 model from Keras format to a format with quantized weights.',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    parser.add_argument('input', help='Path to VGG19 Keras h5 file.')
+    parser.add_argument('output', help='Path to output file.')
+    args = parser.parse_args(argv[1:])
+    vgg19 = VGG19.from_keras_h5(args.input)
+    vgg19.save_quantized_bin(args.output)
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv))
