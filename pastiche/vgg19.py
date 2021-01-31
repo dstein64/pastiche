@@ -40,47 +40,19 @@ DEFAULT_POOLING='max'
 
 class VGG19(nn.Module):
     LAYER_NAMES = (
-        'block1_conv1',
-        'block1_relu1',
-        'block1_conv2',
-        'block1_relu2',
-        'block1_pool',
-
-        'block2_conv1',
-        'block2_relu1',
-        'block2_conv2',
-        'block2_relu2',
-        'block2_pool',
-
-        'block3_conv1',
-        'block3_relu1',
-        'block3_conv2',
-        'block3_relu2',
-        'block3_conv3',
-        'block3_relu3',
-        'block3_conv4',
-        'block3_relu4',
-        'block3_pool',
-
-        'block4_conv1',
-        'block4_relu1',
-        'block4_conv2',
-        'block4_relu2',
-        'block4_conv3',
-        'block4_relu3',
-        'block4_conv4',
-        'block4_relu4',
-        'block4_pool',
-
-        'block5_conv1',
-        'block5_relu1',
-        'block5_conv2',
-        'block5_relu2',
-        'block5_conv3',
-        'block5_relu3',
-        'block5_conv4',
-        'block5_relu4',
-        'block5_pool',
+        # Block 1
+        'block1_conv1', 'block1_relu1', 'block1_conv2', 'block1_relu2', 'block1_pool',
+        # Block 2
+        'block2_conv1', 'block2_relu1', 'block2_conv2', 'block2_relu2', 'block2_pool',
+        # Block 3
+        'block3_conv1', 'block3_relu1', 'block3_conv2', 'block3_relu2', 'block3_conv3',
+        'block3_relu3', 'block3_conv4', 'block3_relu4', 'block3_pool',
+        # Block 4
+        'block4_conv1', 'block4_relu1', 'block4_conv2', 'block4_relu2', 'block4_conv3',
+        'block4_relu3', 'block4_conv4', 'block4_relu4', 'block4_pool',
+        # Block 5
+        'block5_conv1', 'block5_relu1', 'block5_conv2', 'block5_relu2', 'block5_conv3',
+        'block5_relu3', 'block5_conv4', 'block5_relu4', 'block5_pool',
     )
     # LAYER_INDEX_LOOKUP maps layer names to their indices.
     LAYER_INDEX_LOOKUP = dict(zip(LAYER_NAMES, range(len(LAYER_NAMES))))
@@ -148,8 +120,7 @@ class VGG19(nn.Module):
         self.block5_pool = pool(kernel_size=2, stride=2)
 
         # Weight instantiation
-
-        for field in weights._fields:
+        for field in VGG19.Weights._fields:
             layer = getattr(self, field)
             weight, bias = getattr(weights, field)
             layer.weight.data = torch.from_numpy(weight)
@@ -223,10 +194,7 @@ class VGG19(nn.Module):
     def from_keras_h5(path, pooling=DEFAULT_POOLING):
         with h5py.File(path, 'r') as f:
             weights_dict = {}
-            for layer_name in VGG19.LAYER_NAMES:
-                # Only the convolutional layers have weights.
-                if not layer_name.split('_')[1].startswith('conv'):
-                    continue
+            for layer_name in VGG19.Weights._fields:
                 W = f[f'/{layer_name}/{layer_name}_W_1:0'][()].transpose((3, 2, 0, 1))
                 b = f[f'/{layer_name}/{layer_name}_b_1:0'][()]
                 weights_dict[layer_name] = (W, b)
