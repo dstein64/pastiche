@@ -449,6 +449,7 @@ def _parse_args(argv):
     parser.add_argument('--no-verbose', action='store_false', dest='verbose')
     parser.add_argument('--info-step', type=int, default=100, help='Step size for displaying information.')
     parser.add_argument('--workspace', help='Directory for saving intermediate results.')
+    parser.add_argument('--workspace-prefix', help='Prefix for workspace images.', default='')
     parser.add_argument('--workspace-step', type=int, default=10, help='Step size for saving to workspace.')
 
     # Input options
@@ -566,7 +567,7 @@ def main(argv=sys.argv):
             artist.draw()
         if args.workspace is not None and step % args.workspace_step == 0:
             os.makedirs(args.workspace, exist_ok=True)
-            name = f'{step:0{max_step_str_width}d}.png'
+            name = f'{args.workspace_prefix}{step:0{max_step_str_width}d}.png'
             path = os.path.join(args.workspace, name)
             save_image(artist.pastiche, path)
         if args.verbose and step % args.info_step == 0:
