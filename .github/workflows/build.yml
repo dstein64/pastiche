@@ -16,10 +16,6 @@ jobs:
       matrix:
         python-version: [3.6, 3.7, 3.8, 3.9]
         os: [macos-latest, windows-latest, ubuntu-latest]
-        exclude:
-          # Expected failure on Ubuntu using Python 3.9 (PyTorch Issue #50858)
-          - os: ubuntu-latest
-            python-version: 3.9
 
     steps:
     - name: Checkout
