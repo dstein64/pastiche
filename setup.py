@@ -37,7 +37,7 @@ setup(
     package_data={'pastiche': ['version.txt', 'vgg19_weights_tf_dim_ordering_tf_kernels_notop_q.bin']},
     packages=['pastiche'],
     python_requires='>=3.6',
-    install_requires=['h5py', 'pillow', 'torch', 'torchvision'],
+    install_requires=['h5py', 'numpy', 'pillow', 'torch', 'torchvision'],
     url='https://github.com/dstein64/pastiche',
     version=version,
 )
