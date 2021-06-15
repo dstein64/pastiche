@@ -46,12 +46,6 @@ jobs:
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
-    - name: Install Torch (windows)
-      if: startsWith(matrix.os, 'windows-')
-      run: |
-        pip install torch==1.9.0+cpu torchvision==0.10.0+cpu `
-          -f https://download.pytorch.org/whl/torch_stable.html
-
     - name: Install
       run: |
         pip install .
