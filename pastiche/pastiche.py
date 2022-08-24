@@ -308,8 +308,8 @@ class PasticheArtist:
                 loss = loss + style_weight * layer_loss
 
         # total-variation loss
-        tv_loss = (self.pastiche[:, :, :, 1:] - self.pastiche[:, :, :, :-1]).abs().sum().to('cpu')
-        tv_loss += (self.pastiche[:, :, 1:, :] - self.pastiche[:, :, :-1, :]).abs().sum().to('cpu')
+        tv_loss = (self.pastiche[:, :, :, 1:] - self.pastiche[:, :, :, :-1]).abs().mean().to('cpu')
+        tv_loss += (self.pastiche[:, :, 1:, :] - self.pastiche[:, :, :-1, :]).abs().mean().to('cpu')
         loss = loss + self.tv_weight * tv_loss
 
         return loss
