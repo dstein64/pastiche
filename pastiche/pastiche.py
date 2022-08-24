@@ -310,7 +310,7 @@ class PasticheArtist:
         # total-variation loss
         tv_loss = (self.pastiche[:, :, :, 1:] - self.pastiche[:, :, :, :-1]).abs().mean().to('cpu')
         tv_loss += (self.pastiche[:, :, 1:, :] - self.pastiche[:, :, :-1, :]).abs().mean().to('cpu')
-        loss = loss + self.tv_weight * tv_loss
+        loss = loss + 0.5 * self.tv_weight * tv_loss
 
         return loss
 
