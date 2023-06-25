@@ -31,6 +31,10 @@ jobs:
           # https://github.com/actions/setup-python/issues/544#issuecomment-1332535877
           - os: ubuntu-latest
             python-version: '3.6'
+          # Temporarily skip Python 3.7 on macOS to avoid "ModuleNotFoundError: No module named '_bz2'".
+          # https://github.com/actions/setup-python/issues/682
+          - os: macos-latest
+            python-version: '3.7'
 
     steps:
     - name: Checkout
