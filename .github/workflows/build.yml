@@ -67,17 +67,7 @@ jobs:
         pip install .
 
     - name: Test
-      if: "!startsWith(matrix.os, 'windows-')"
-      run: |
-        pastiche                                    \
-          --num-steps 10                            \
-          --info-step 1                             \
-          --content example/boston.jpg              \
-          --styles example/vangogh_starry_night.jpg \
-          --output test-example.png
-
-    - name: Test (windows)
-      if: startsWith(matrix.os, 'windows-')
+      shell: pwsh
       run: |
         pastiche                                    `
           --num-steps 10                            `
