@@ -90,7 +90,13 @@ def load_image(image_path, pixels=None, size=None):
         h_ = h
         w_ = w
     x = resize(x, (h_, w_))
-    x = to_tensor(x) * 255.0
+    x = torch.tensor(x.getdata(), dtype=torch.float32)
+    if x.ndim == 1:
+        # Add a dimension for monochrome images
+        x = torch.unsqueeze(x, 1)
+    x = x.transpose(1, 0).reshape((-1, h_, w_))
+    if not x.is_contiguous():
+        x = torch.clone(x, memory_format=torch.contiguous_format)
     if x.shape[0] == 2:
         raise RuntimeError('Unsupported image format.')
     elif x.shape[0] == 1:
