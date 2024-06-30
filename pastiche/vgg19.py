@@ -4,7 +4,6 @@ from typing import Iterable
 import re
 import sys
 
-import h5py
 import torch
 import torch.nn as nn
 
@@ -119,8 +118,8 @@ class VGG19(nn.Module):
         for field in VGG19.Weights._fields:
             layer = getattr(self, field)
             weight, bias = getattr(weights, field)
-            layer.weight.data = torch.from_numpy(weight)
-            layer.bias.data = torch.from_numpy(bias)
+            layer.weight.data = weight
+            layer.bias.data = bias
 
         self.device_strategy = ['cpu'] * len(VGG19.LAYER_NAMES)
 
@@ -182,17 +181,18 @@ class VGG19(nn.Module):
             W_table = q_state[layer_name + '_W_table']
             W = W_table[W_q.flatten().tolist()].reshape(shape)
             b = q_state[layer_name + '_b']
-            weights_dict[layer_name] = W.numpy(), b.numpy()
+            weights_dict[layer_name] = W, b
         weights = VGG19.Weights(**weights_dict)
         return VGG19(weights, pooling=pooling)
 
     @staticmethod
     def from_keras_h5(path, pooling=DEFAULT_POOLING):
+        import h5py    # Not required for general pastiche usage, just for generating quantized model.
         with h5py.File(path, 'r') as f:
             weights_dict = {}
             for layer_name in VGG19.Weights._fields:
-                W = f[f'/{layer_name}/{layer_name}_W_1:0'][()].transpose((3, 2, 0, 1))
-                b = f[f'/{layer_name}/{layer_name}_b_1:0'][()]
+                W = torch.from_numpy(f[f'/{layer_name}/{layer_name}_W_1:0'][()].transpose((3, 2, 0, 1)))
+                b = torch.from_numpy(f[f'/{layer_name}/{layer_name}_b_1:0'][()])
                 weights_dict[layer_name] = (W, b)
         return VGG19(VGG19.Weights(**weights_dict), pooling=pooling)
 

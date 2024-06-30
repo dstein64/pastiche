@@ -28,7 +28,7 @@ setup(
     entry_points={
         'console_scripts': ['pastiche=pastiche.pastiche:main'],
     },
-    extras_require={'dev': ['kmeans1d']},
+    extras_require={'dev': ['h5py', 'kmeans1d']},
     keywords=['gatys', 'style-transfer', 'neural-style-transfer'],
     license='MIT',
     long_description=long_description,
@@ -37,7 +37,7 @@ setup(
     package_data={'pastiche': ['version.txt', 'vgg19_weights_tf_dim_ordering_tf_kernels_notop_q.bin']},
     packages=['pastiche'],
     python_requires='>=3.6',
-    install_requires=['h5py', 'numpy', 'pillow', 'torch', 'torchvision'],
+    install_requires=['pillow', 'torch', 'torchvision'],
     url='https://github.com/dstein64/pastiche',
     version=version,
 )
