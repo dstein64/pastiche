@@ -13,7 +13,7 @@ from PIL import Image
 import torch
 from torch.nn.functional import mse_loss
 import torch.optim as optim
-from torchvision.transforms.functional import resize, to_tensor, to_pil_image
+from torchvision.transforms.functional import resize, to_pil_image
 
 from pastiche.vgg19 import VGG19
 
