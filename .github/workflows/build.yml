@@ -70,8 +70,8 @@ jobs:
       shell: pwsh
       run: |
         $ErrorActionPreference = "Stop"
-        throw "error"
         pastiche                                    `
+          --fake                                    `
           --num-steps 10                            `
           --info-step 1                             `
           --content example/boston.jpg              `
