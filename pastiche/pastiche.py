@@ -13,7 +13,7 @@ from PIL import Image
 import torch
 from torch.nn.functional import mse_loss
 import torch.optim as optim
-from torchvision.transforms.functional import resize, to_pil_image
+from torchvision.transforms.functional import resize
 
 from pastiche.vgg19 import VGG19
 
@@ -119,9 +119,9 @@ def save_image(input, path):
     for idx, shift in enumerate(VGG_MEAN):
         x[idx] += shift
     x[[0, 1, 2]] = x[[2, 1, 0]]  # BGR -> RGB
-    x.div_(255.0)
-    x.clamp_(0.0, 1.0)
-    x = to_pil_image(x)
+    x = x.round().clamp(0.0, 255.0).type(torch.uint8)
+    x = x.permute((1, 2, 0))  # channels-first -> channels-last
+    x = Image.frombytes('RGB', (x.shape[1], x.shape[0]), bytes(x.flatten()))
     x.save(path, 'png')
 
 
