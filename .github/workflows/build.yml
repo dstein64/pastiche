@@ -71,7 +71,6 @@ jobs:
       run: |
         $ErrorActionPreference = "Stop"
         pastiche                                    `
-          --fake                                    `
           --num-steps 10                            `
           --info-step 1                             `
           --content example/boston.jpg              `
