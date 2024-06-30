@@ -70,6 +70,7 @@ jobs:
       shell: pwsh
       run: |
         $ErrorActionPreference = "Stop"
+        throw "error"
         pastiche                                    `
           --num-steps 10                            `
           --info-step 1                             `
