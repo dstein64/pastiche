@@ -1,4 +1,5 @@
 import argparse
+import array
 from collections import namedtuple
 import multiprocessing
 from typing import Iterable
@@ -34,16 +35,10 @@ import torch.nn as nn
 DEFAULT_POOLING='max'
 
 
-def quantize(layer, k):
+def quantize(weight):
     import kmeans1d  # Not required for general pastiche usage, just for generating quantized model.
-    bias = layer.bias
-    shape = layer.weight.shape
-    weight = layer.weight.flatten()
-    clusters, centroids = kmeans1d.cluster(weight, k)
-    W_q = torch.tensor(clusters, dtype=torch.uint8).reshape(shape)
-    W_table = torch.tensor(centroids, dtype=torch.float32)
-    b = bias.detach().to('cpu', copy=True)
-    return W_q, W_table, b
+    k = 2 ** 8
+    return kmeans1d.cluster(weight, k)
 
 
 class VGG19(nn.Module):
@@ -168,19 +163,17 @@ class VGG19(nn.Module):
         return self
 
     def save_quantized_bin(self, path, num_jobs=1):
-        k = 2 ** 8
         q_state = {}  # quantized state
         layer_names = [layer_name for layer_name in VGG19.LAYER_NAMES if re.match(r'^block\d+_conv\d+$', layer_name)]
         layers = [getattr(self, layer_name) for layer_name in layer_names]
-
+        weights = [array.array('f', layer.weight.flatten().detach()) for layer in layers]
         with multiprocessing.Pool(processes=num_jobs) as pool:
-            inputs = ((layer, k) for layer in layers)
-            for idx, (W_q, W_table, b) in enumerate(pool.starmap(quantize, inputs)):
+            for idx, (clusters, centroids) in enumerate(pool.map(quantize, weights)):
                 layer_name = layer_names[idx]
-                q_state[layer_name + '_W_q'] = W_q
-                q_state[layer_name + '_W_table'] = W_table
-                q_state[layer_name + '_b'] = b
-
+                layer = layers[idx]
+                q_state[layer_name + '_W_q'] = torch.tensor(clusters, dtype=torch.uint8).reshape(layer.weight.shape)
+                q_state[layer_name + '_W_table'] = torch.tensor(centroids, dtype=torch.float32)
+                q_state[layer_name + '_b'] = layer.bias.detach().to('cpu', copy=True)
         torch.save(q_state, path)
 
     @staticmethod
