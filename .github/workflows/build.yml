@@ -69,6 +69,7 @@ jobs:
     - name: Test
       shell: pwsh
       run: |
+        $ErrorActionPreference = "Stop"
         pastiche                                    `
           --num-steps 10                            `
           --info-step 1                             `
