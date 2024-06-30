@@ -88,7 +88,7 @@ def load_image(image_path, pixels=None, size=None):
     else:
         h_ = h
         w_ = w
-    x = x.resize((w_, h_), Image.Resampling.BILINEAR)
+    x = x.resize((w_, h_), Image.BILINEAR)
     x = torch.tensor(x.getdata(), dtype=torch.float32)
     if x.ndim == 1:
         # Add a channel dimension for monochrome images
