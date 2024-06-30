@@ -72,7 +72,7 @@ jobs:
         $ErrorActionPreference = 'Stop'
         # First, confirm that numpy is not installed
         try {
-            python -c 'import numpy' 2>$null
+            python -c 'import torch' 2>$null
             throw 'numpy is installed'
         } catch {}
         pastiche                                    `
