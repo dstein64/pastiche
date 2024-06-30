@@ -13,7 +13,6 @@ from PIL import Image
 import torch
 from torch.nn.functional import mse_loss
 import torch.optim as optim
-from torchvision.transforms.functional import resize
 
 from pastiche.vgg19 import VGG19
 
@@ -89,7 +88,7 @@ def load_image(image_path, pixels=None, size=None):
     else:
         h_ = h
         w_ = w
-    x = resize(x, (h_, w_))
+    x = x.resize((w_, h_), Image.Resampling.BILINEAR)
     x = torch.tensor(x.getdata(), dtype=torch.float32)
     if x.ndim == 1:
         # Add a channel dimension for monochrome images
