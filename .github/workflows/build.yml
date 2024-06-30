@@ -69,7 +69,12 @@ jobs:
     - name: Test
       shell: pwsh
       run: |
-        $ErrorActionPreference = "Stop"
+        $ErrorActionPreference = 'Stop'
+        # First, confirm that numpy is not installed
+        try {
+            python -c 'import numpy' 2>$null
+            throw 'numpy is installed'
+        } catch {}
         pastiche                                    `
           --num-steps 10                            `
           --info-step 1                             `
