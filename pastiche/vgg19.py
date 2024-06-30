@@ -1,5 +1,6 @@
 import argparse
 from collections import namedtuple
+import multiprocessing
 from typing import Iterable
 import re
 import sys
@@ -31,6 +32,18 @@ import torch.nn as nn
 #           keras_applications/vgg19.py
 
 DEFAULT_POOLING='max'
+
+
+def quantize(layer, k):
+    import kmeans1d  # Not required for general pastiche usage, just for generating quantized model.
+    bias = layer.bias
+    shape = layer.weight.shape
+    weight = layer.weight.flatten()
+    clusters, centroids = kmeans1d.cluster(weight, k)
+    W_q = torch.tensor(clusters, dtype=torch.uint8).reshape(shape)
+    W_table = torch.tensor(centroids, dtype=torch.float32)
+    b = bias.detach().to('cpu', copy=True)
+    return W_q, W_table, b
 
 
 class VGG19(nn.Module):
@@ -154,20 +167,20 @@ class VGG19(nn.Module):
         self.device_strategy = device_strategy
         return self
 
-    def save_quantized_bin(self, path):
-        import kmeans1d  # Not required for general pastiche usage, just for generating quantized model.
+    def save_quantized_bin(self, path, num_jobs=1):
         k = 2 ** 8
         q_state = {}  # quantized state
         layer_names = [layer_name for layer_name in VGG19.LAYER_NAMES if re.match(r'^block\d+_conv\d+$', layer_name)]
-        for layer_name in layer_names:
-            layer = getattr(self, layer_name)
-            bias = layer.bias
-            shape = layer.weight.shape
-            weight = layer.weight.flatten()
-            clusters, centroids = kmeans1d.cluster(weight, k)
-            q_state[layer_name + '_W_q'] = torch.tensor(clusters, dtype=torch.uint8).reshape(shape)
-            q_state[layer_name + '_W_table'] = torch.tensor(centroids, dtype=torch.float32)
-            q_state[layer_name + '_b'] = bias.detach().to('cpu', copy=True)
+        layers = [getattr(self, layer_name) for layer_name in layer_names]
+
+        with multiprocessing.Pool(processes=num_jobs) as pool:
+            inputs = ((layer, k) for layer in layers)
+            for idx, (W_q, W_table, b) in enumerate(pool.starmap(quantize, inputs)):
+                layer_name = layer_names[idx]
+                q_state[layer_name + '_W_q'] = W_q
+                q_state[layer_name + '_W_table'] = W_table
+                q_state[layer_name + '_b'] = b
+
         torch.save(q_state, path)
 
     @staticmethod
@@ -203,11 +216,12 @@ def main(argv=sys.argv):
         description='Convert a VGG19 model from Keras format to a format with quantized weights.',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
+    parser.add_argument('--num-jobs', type=int, default=1)
     parser.add_argument('input', help='Path to VGG19 Keras h5 file.')
     parser.add_argument('output', help='Path to output file.')
     args = parser.parse_args(argv[1:])
     vgg19 = VGG19.from_keras_h5(args.input)
-    vgg19.save_quantized_bin(args.output)
+    vgg19.save_quantized_bin(args.output, num_jobs=args.num_jobs)
 
 
 if __name__ == '__main__':
