@@ -71,10 +71,8 @@ jobs:
       run: |
         $ErrorActionPreference = 'Stop'
         # First, confirm that numpy is not installed
-        try {
-            python -c 'import torch' 2>$null
-            throw 'numpy is installed'
-        } catch {}
+        python -c 'import torch' 2>$null
+        if ($LASTEXITCODE -eq 0) { throw 'numpy is installed' }
         pastiche                                    `
           --num-steps 10                            `
           --info-step 1                             `
