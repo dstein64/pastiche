@@ -92,7 +92,7 @@ def load_image(image_path, pixels=None, size=None):
     x = resize(x, (h_, w_))
     x = torch.tensor(x.getdata(), dtype=torch.float32)
     if x.ndim == 1:
-        # Add a dimension for monochrome images
+        # Add a channel dimension for monochrome images
         x = torch.unsqueeze(x, 1)
     x = x.transpose(1, 0).reshape((-1, h_, w_))
     if not x.is_contiguous():
