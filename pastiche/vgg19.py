@@ -1,5 +1,4 @@
 import argparse
-import array
 from collections import namedtuple
 import multiprocessing
 from typing import Iterable
@@ -166,7 +165,7 @@ class VGG19(nn.Module):
         q_state = {}  # quantized state
         layer_names = [layer_name for layer_name in VGG19.LAYER_NAMES if re.match(r'^block\d+_conv\d+$', layer_name)]
         layers = [getattr(self, layer_name) for layer_name in layer_names]
-        weights = [array.array('f', layer.weight.flatten().detach()) for layer in layers]
+        weights = [layer.weight.flatten().detach() for layer in layers]
         with multiprocessing.Pool(processes=num_jobs) as pool:
             for idx, (clusters, centroids) in enumerate(pool.map(quantize, weights)):
                 layer_name = layer_names[idx]
