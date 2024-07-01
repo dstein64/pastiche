@@ -523,6 +523,15 @@ def _parse_args(argv):
 
 def main(argv=sys.argv):
     start_time = time.time()
+    # When numpy is not installed, the first usage of certain torch functionality issues a warning,
+    # even though numpy is not required.
+    #   https://github.com/pytorch/pytorch/issues/115638
+    #   https://github.com/pytorch/pytorch/issues/125678
+    # We create a torch tensor for the purpose of generating the warning, which we ignore. Since
+    # the warning is only issued once, there are no future warnings.
+    with warnings.catch_warnings():
+        warnings.filterwarnings(action='ignore', message='Failed to initialize NumPy')
+        torch.tensor(0)
     args = _parse_args(argv)
     seed = args.seed
     if seed is None:
