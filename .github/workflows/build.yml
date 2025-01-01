@@ -31,6 +31,9 @@ jobs:
           # https://github.com/actions/setup-python/issues/544#issuecomment-1332535877
           - os: ubuntu-latest
             python-version: '3.6'
+          # Python 3.7 is not supported on GitHub-hosted Ubuntu runners as of Ubuntu 24.04.
+          - os: ubuntu-latest
+            python-version: '3.7'
           # Python versions prior to 3.8 are not supported on GitHub-hosted macOS runners
           # as of macOS 14.
           # https://github.com/actions/runner-images/issues/9770
