@@ -24,7 +24,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.6', '3.7', '3.8', '3.9', '3.10', '3.11', '3.12', '3.13', '3.14']
+        python-version:
+          - '3.6'
+          - '3.7'
+          - '3.8'
+          - '3.9'
+          - '3.10'
+          - '3.11'
+          - '3.12'
+          - '3.13'
+          - '3.14'
+          - '3.15'
         os: [macos-latest, windows-latest, ubuntu-latest]
         exclude:
           # Python 3.6 is not supported on GitHub-hosted Ubuntu runners as of Ubuntu 22.04.
@@ -34,6 +44,11 @@ jobs:
           # Python 3.7 is not supported on GitHub-hosted Ubuntu runners as of Ubuntu 24.04.
           - os: ubuntu-latest
             python-version: '3.7'
+          # Python 3.8 and 3.9 are not supported on GitHub-hosted Ubuntu runners as of Ubuntu 26.04.
+          - os: ubuntu-latest
+            python-version: '3.8'
+          - os: ubuntu-latest
+            python-version: '3.9'
           # Python versions prior to 3.8 are not supported on GitHub-hosted macOS runners
           # as of macOS 14.
           # https://github.com/actions/runner-images/issues/9770
@@ -44,13 +59,13 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       with:
         # When the ref is empty, HEAD will be checked out.
         ref: ${{ github.event.inputs.git-ref }}
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v7
       with:
         python-version: ${{ matrix.python-version }}
 
